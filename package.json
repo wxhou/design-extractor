@@ -1,0 +1,31 @@
+{
+  "name": "design-extractor",
+  "version": "1.0.0",
+  "description": "Extract DESIGN.md tokens from any website",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "cli": "node cli.js"
+  },
+  "bin": {
+    "design-extractor": "./cli.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "cheerio": "^1.2.0",
+    "next": "^16.2.4",
+    "openai": "^6.36.0",
+    "playwright": "^1.59.1",
+    "postcss": "^8.5.12",
+    "postcss-values-parser": "^7.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "sql.js": "^1.14.1",
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "agentation": "^3.0.2"
+  }
+}

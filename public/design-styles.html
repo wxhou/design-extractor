@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design Styles Comparison</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #111;
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    /* ========================
+       INTRO NAVIGATION
+    ======================== */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 32px;
+      background: rgba(17,17,17,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .nav-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .nav-label {
+      font-size: 12px;
+      color: #666;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .nav-dots {
+      display: flex;
+      gap: 8px;
+    }
+    .nav-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      opacity: 0.4;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .nav-dot:hover { opacity: 0.8; }
+    .nav-dot.a { background: #e63946; }
+    .nav-dot.b { background: #d97706; }
+    .nav-dot.c { background: #dc2626; }
+
+    /* ========================
+       THREE COLUMN LAYOUT
+    ======================== */
+    .columns {
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr 1px 1fr;
+      min-height: 100vh;
+      padding-top: 60px;
+    }
+    .col {
+      padding: 0 0 80px;
+      overflow: hidden;
+    }
+    .col-label {
+      position: sticky;
+      top: 60px;
+      z-index: 10;
+      padding: 14px 24px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .col-label span { opacity: 0.5; font-weight: 400; }
+    .col-a .col-label { color: #e63946; border-bottom-color: rgba(230,57,70,0.2); }
+    .col-b .col-label { color: #d97706; border-bottom-color: rgba(217,119,6,0.2); }
+    .col-c .col-label { color: #dc2626; border-bottom-color: rgba(220,38,38,0.2); }
+
+    .divider {
+      background: rgba(255,255,255,0.06);
+    }
+
+    /* ========================
+       SHARED CARD GRID
+    ======================== */
+    .style-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 20px 20px 0;
+    }
+    .style-card {
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .style-card:hover { transform: translateY(-2px); }
+
+    /* ========================
+       SHARED HERO
+    ======================== */
+    .style-hero {
+      padding: 40px 24px 32px;
+      text-align: center;
+    }
+    .style-overline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      margin-bottom: 16px;
+    }
+    .style-title {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 10px;
+    }
+    .style-subtitle {
+      font-size: 13px;
+      line-height: 1.65;
+      opacity: 0.6;
+      max-width: 300px;
+      margin: 0 auto 24px;
+    }
+
+    /* ========================
+       SHARED SEARCH
+    ======================== */
+    .style-search {
+      padding: 0 24px 28px;
+    }
+    .style-search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      height: 44px;
+      border-radius: 10px;
+    }
+    .style-search-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 14px;
+      background: transparent;
+    }
+    .style-search-btn {
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* ========================
+       SHARED FILTERS
+    ======================== */
+    .style-filters {
+      display: flex;
+      gap: 6px;
+      padding: 0 24px 24px;
+      flex-wrap: wrap;
+    }
+    .style-pill {
+      padding: 5px 12px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid;
+      transition: all 0.15s;
+    }
+
+    /* ========================
+       SHARED CARDS
+    ======================== */
+    .card-img {
+      width: 100%;
+      aspect-ratio: 16/10;
+      object-fit: cover;
+      display: block;
+    }
+    .card-body {
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-name {
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .card-tag {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 99px;
+    }
+    .card-arrow {
+      width: 12px;
+      height: 12px;
+      opacity: 0.4;
+    }
+
+    /* ========================
+       STYLE A — Linear/Raycast
+    ======================== */
+    .style-a { background: #faf9f7; }
+    .style-a .col-label { background: #faf9f7; }
+    .style-a .style-overline { background: rgba(230,57,70,0.1); color: #e63946; }
+    .style-a .style-title { color: #1a100e; font-family: 'Fraunces', serif; }
+    .style-a .style-title em { font-style: normal; color: #e63946; }
+    .style-a .style-subtitle { color: #6b5a52; }
+    .style-a .style-search-box { background: #fff; border: 1.5px solid #e0d8d4; }
+    .style-a .style-search-input { color: #1a100e; }
+    .style-a .style-search-input::placeholder { color: #b0a49c; }
+    .style-a .style-search-btn { background: #e63946; color: #fff; }
+    .style-a .style-pill { background: transparent; border-color: #e0d8d4; color: #6b5a52; }
+    .style-a .style-pill:first-child { background: #e63946; border-color: #e63946; color: #fff; }
+    .style-a .style-pill:not(:first-child):hover { border-color: #e63946; color: #e63946; }
+    .style-a .card-name { color: #1a100e; }
+    .style-a .card-tag { background: rgba(230,57,70,0.08); color: #e63946; }
+    .style-a .style-card { background: #fff; border: 1px solid #ede9e5; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .style-a .style-card:hover { box-shadow: 0 4px 16px rgba(230,57,70,0.12); border-color: #e8b4b0; }
+
+    /* ========================
+       STYLE B — Blueprint
+    ======================== */
+    .style-b { background: #f5f4f1; }
+    .style-b .col-label { background: #f5f4f1; }
+    .style-b .style-overline { background: rgba(217,119,6,0.1); color: #d97706; border: 1px solid rgba(217,119,6,0.2); }
+    .style-b .style-title { color: #1c1917; font-family: 'JetBrains Mono', monospace; font-size: 22px; }
+    .style-b .style-title em { font-style: normal; color: #d97706; }
+    .style-b .style-subtitle { color: #78716c; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .style-b .style-search-box { background: transparent; border: 1.5px solid #292524; }
+    .style-b .style-search-input { color: #1c1917; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .style-b .style-search-input::placeholder { color: #a8a29e; }
+    .style-b .style-search-btn { background: #d97706; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .style-b .style-pill { background: transparent; border-color: #292524; color: #44403c; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+    .style-b .style-pill:first-child { background: #292524; color: #f5f4f1; }
+    .style-b .style-pill:not(:first-child):hover { border-width: 2px; color: #d97706; }
+    .style-b .card-name { color: #1c1917; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .style-b .card-tag { background: transparent; border: 1px solid #44403c; color: #44403c; font-family: 'JetBrains Mono', monospace; }
+    .style-b .style-card { background: transparent; border: 1px solid #292524; }
+    .style-b .style-card:hover { border-width: 2px; transform: translate(-1px, -2px); }
+
+    /* ========================
+       STYLE C — Editorial
+    ======================== */
+    .style-c { background: #ffffff; }
+    .style-c .col-label { background: #ffffff; }
+    .style-c .style-overline { background: transparent; color: #dc2626; border-bottom: 2px solid #dc2626; border-radius: 0; padding: 2px 0; font-family: 'Fraunces', serif; font-style: italic; }
+    .style-c .style-title { color: #000; font-family: 'Fraunces', serif; font-size: 30px; font-weight: 700; letter-spacing: -0.04em; text-align: left; margin: 0 24px 10px; }
+    .style-c .style-subtitle { color: #666; font-size: 13px; text-align: left; margin: 0 24px 24px; max-width: none; }
+    .style-c .style-search { padding: 0 24px 28px; }
+    .style-c .style-search-box { background: #fff; border-bottom: 2px solid #000; border-radius: 0; padding: 0; }
+    .style-c .style-search-input { color: #000; height: 44px; font-family: 'Fraunces', serif; font-size: 15px; }
+    .style-c .style-search-input::placeholder { color: #ccc; }
+    .style-c .style-search-btn { background: #000; color: #fff; border-radius: 0; padding: 10px 20px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .style-c .style-filters { padding: 0 24px 28px; justify-content: flex-start; gap: 16px; }
+    .style-c .style-pill { background: transparent; border: none; color: #999; font-family: 'Fraunces', serif; font-size: 13px; padding: 0; font-weight: 400; letter-spacing: -0.01em; border-radius: 0; }
+    .style-c .style-pill:first-child { color: #000; border-bottom: 2px solid #000; padding-bottom: 2px; }
+    .style-c .style-pill:not(:first-child):hover { color: #000; }
+    .style-c .card-name { color: #000; font-family: 'Fraunces', serif; font-size: 13px; font-weight: 700; }
+    .style-c .card-tag { background: transparent; border: none; color: #dc2626; font-family: 'Fraunces', serif; font-style: italic; padding: 0; }
+    .style-c .card-body { padding: 10px 0 0; border-top: 1px solid #f0f0f0; margin: 0 0 16px; }
+    .style-c .card-arrow { display: none; }
+    .style-c .style-card { border-radius: 0; background: #fff; }
+    .style-c .style-card:hover .card-img { filter: grayscale(20%); }
+    .style-c .style-hero { text-align: left; padding: 48px 24px 24px; }
+    .style-c .style-grid { gap: 20px; }
+    .style-c .card-img { border-radius: 0; }
+
+    /* ========================
+       CARD IMAGE PLACEHOLDERS
+    ======================== */
+    .card-thumb {
+      width: 100%;
+      aspect-ratio: 16/10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .style-a .card-thumb { background: linear-gradient(135deg, #fff5f5 0%, #ffe0de 100%); color: #e63946; }
+    .style-b .card-thumb { background: linear-gradient(135deg, #fef9ee 0%, #fde68a 100%); color: #d97706; }
+    .style-c .card-thumb { background: #000; color: #fff; }
+
+    /* ========================
+       RESPONSIVE
+    ======================== */
+    @media (max-width: 900px) {
+      .columns {
+        grid-template-columns: 1fr;
+        padding-top: 60px;
+      }
+      .divider { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <span class="nav-title">Design Styles</span>
+  <span class="nav-label">3 directions</span>
+  <div class="nav-dots">
+    <div class="nav-dot a" title="A: Linear/Raycast"></div>
+    <div class="nav-dot b" title="B: Blueprint"></div>
+    <div class="nav-dot c" title="C: Editorial"></div>
+  </div>
+</nav>
+
+<!-- THREE COLUMNS -->
+<div class="columns">
+
+  <!-- ========================
+       COLUMN A — Linear/Raycast
+  ======================== -->
+  <div class="col col-a style-a">
+    <div class="col-label">A — Linear / Raycast <span>/ warm coral</span></div>
+
+    <div class="style-hero">
+      <div class="style-overline">Open Source</div>
+      <h1 class="style-title">Turn any URL into a <em>DESIGN.md</em></h1>
+      <p class="style-subtitle">Extract colors, typography, spacing, and components into a structured DESIGN.md your AI agent can use.</p>
+    </div>
+
+    <div class="style-search">
+      <div class="style-search-box">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="#b0a49c" stroke-width="1.5"/><path d="M9.5 9.5L12 12" stroke="#b0a49c" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input class="style-search-input" type="text" placeholder="https://stripe.com">
+        <button class="style-search-btn">Extract Tokens</button>
+      </div>
+    </div>
+
+    <div class="style-filters">
+      <div class="style-pill">All</div>
+      <div class="style-pill">Minimal</div>
+      <div class="style-pill">SaaS</div>
+      <div class="style-pill">Editorial</div>
+      <div class="style-pill">Retro</div>
+      <div class="style-pill">Playful</div>
+    </div>
+
+    <div class="style-grid">
+      <div class="style-card">
+        <div class="card-thumb">Stripe</div>
+        <div class="card-body">
+          <span class="card-name">Stripe</span>
+          <span class="card-tag">Minimal</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Vercel</div>
+        <div class="card-body">
+          <span class="card-name">Vercel</span>
+          <span class="card-tag">SaaS</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Linear</div>
+        <div class="card-body">
+          <span class="card-name">Linear</span>
+          <span class="card-tag">Dark</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Notion</div>
+        <div class="card-body">
+          <span class="card-name">Notion</span>
+          <span class="card-tag">Editorial</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIVIDER -->
+  <div class="divider"></div>
+
+  <!-- ========================
+       COLUMN B — Blueprint
+  ======================== -->
+  <div class="col col-b style-b">
+    <div class="col-label">B — Blueprint <span>/ amber monochrome</span></div>
+
+    <div class="style-hero">
+      <div class="style-overline">OPEN SOURCE // v1.0</div>
+      <h1 class="style-title">URL <em>→</em> DESIGN.md</h1>
+      <p class="style-subtitle">Extract tokens, analyze spacing, and generate structured docs for your AI pipeline.</p>
+    </div>
+
+    <div class="style-search">
+      <div class="style-search-box">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="#a8a29e" stroke-width="1.5"/><path d="M8 8l2.5 2.5" stroke="#a8a29e" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input class="style-search-input" type="text" placeholder="https://stripe.com">
+        <button class="style-search-btn">RUN</button>
+      </div>
+    </div>
+
+    <div class="style-filters">
+      <div class="style-pill">ALL</div>
+      <div class="style-pill">MINIMAL</div>
+      <div class="style-pill">SAAS</div>
+      <div class="style-pill">EDITORIAL</div>
+      <div class="style-pill">RETRO</div>
+      <div class="style-pill">PLAYFUL</div>
+    </div>
+
+    <div class="style-grid">
+      <div class="style-card">
+        <div class="card-thumb">Stripe</div>
+        <div class="card-body">
+          <span class="card-name">Stripe</span>
+          <span class="card-tag">minimal</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Vercel</div>
+        <div class="card-body">
+          <span class="card-name">Vercel</span>
+          <span class="card-tag">saas</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Linear</div>
+        <div class="card-body">
+          <span class="card-name">Linear</span>
+          <span class="card-tag">dark</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Notion</div>
+        <div class="card-body">
+          <span class="card-name">Notion</span>
+          <span class="card-tag">editorial</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIVIDER -->
+  <div class="divider"></div>
+
+  <!-- ========================
+       COLUMN C — Editorial
+  ======================== -->
+  <div class="col col-c style-c">
+    <div class="col-label">C — Editorial <span>/ stark red & serif</span></div>
+
+    <div class="style-hero">
+      <div class="style-overline">Open Source</div>
+      <h1 class="style-title">Turn any URL into a<br>DESIGN.md</h1>
+      <p class="style-subtitle">Extract colors, typography, spacing, and components into a structured markdown file your AI agent can use.</p>
+    </div>
+
+    <div class="style-search">
+      <div class="style-search-box">
+        <input class="style-search-input" type="text" placeholder="https://stripe.com">
+        <button class="style-search-btn">Extract</button>
+      </div>
+    </div>
+
+    <div class="style-filters">
+      <div class="style-pill">All</div>
+      <div class="style-pill">Minimal</div>
+      <div class="style-pill">SaaS</div>
+      <div class="style-pill">Editorial</div>
+      <div class="style-pill">Retro</div>
+      <div class="style-pill">Playful</div>
+    </div>
+
+    <div class="style-grid">
+      <div class="style-card">
+        <div class="card-thumb">Stripe</div>
+        <div class="card-body">
+          <span class="card-name">Stripe</span>
+          <span class="card-tag">Minimal</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Vercel</div>
+        <div class="card-body">
+          <span class="card-name">Vercel</span>
+          <span class="card-tag">SaaS</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Linear</div>
+        <div class="card-body">
+          <span class="card-name">Linear</span>
+          <span class="card-tag">Dark</span>
+        </div>
+      </div>
+      <div class="style-card">
+        <div class="card-thumb">Notion</div>
+        <div class="card-body">
+          <span class="card-name">Notion</span>
+          <span class="card-tag">Editorial</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Smooth scroll to column on dot click
+  document.querySelectorAll('.nav-dot').forEach((dot, i) => {
+    dot.addEventListener('click', () => {
+      const cols = document.querySelectorAll('.col');
+      if (cols[i]) cols[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+
+</body>
+</html>
