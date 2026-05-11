@@ -58,6 +58,13 @@ function initSchema(db) {
       key   TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      slug       TEXT PRIMARY KEY,
+      name_en    TEXT NOT NULL,
+      name_zh    TEXT NOT NULL,
+      sort_order INTEGER DEFAULT 0
+    );
   `);
 
   // 索引（幂等创建）
@@ -143,11 +150,28 @@ async function sync() {
     'total_cards', String(allCards.length)
   );
 
+  seedCategories(db);
+
   const count = db.prepare('SELECT COUNT(*) as c FROM cards').get().c;
   console.log(`  Upserted ${allCards.length} cards in ${elapsed}s`);
   console.log(`  DB now holds ${count} rows`);
 
   db.close();
+}
+
+function seedCategories(db) {
+  const insert = db.prepare('INSERT OR IGNORE INTO categories (slug, name_en, name_zh, sort_order) VALUES (?, ?, ?, ?)');
+  const rows = [
+    ['minimal',   'Minimal',   '极简', 1],
+    ['saas',      'SaaS',      'SaaS', 2],
+    ['dark',      'Dark',      '暗色', 3],
+    ['editorial', 'Editorial', '编辑', 4],
+    ['gradient',  'Gradient',  '渐变', 5],
+    ['playful',   'Playful',   '趣味', 6],
+    ['retro',     'Retro',     '复古', 7],
+  ];
+  const insertMany = db.transaction(() => rows.forEach(r => insert.run(...r)));
+  insertMany();
 }
 
 // ── 查看同步状态 ─────────────────────────────────────────────────────────────

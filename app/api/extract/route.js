@@ -1,43 +1,20 @@
 import { extractDesignTokens, isValidDomain, normalizeUrl } from '../../../src/extractor-v2.js';
-import initSqlJs from 'sql.js';
-import { createRequire } from 'module';
+import { getDb } from '../../../src/db.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 
-const require = createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '..', '..', '..', 'refero.db');
-
-const locateFile = file =>
-  path.join(__dirname, '..', '..', '..', 'node_modules', 'sql.js', 'dist', file);
-
-let SQL;
-
-async function getDb() {
-  if (!SQL) SQL = await initSqlJs({ locateFile });
-  const fileBuffer = fs.readFileSync(DB_PATH);
-  return new SQL.Database(fileBuffer);
-}
-
-function saveDb(db) {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
-}
+const SCREENSHOTS_DIR = path.join(process.cwd(), 'public', 'screenshots');
 
 function saveScreenshot(screenshotBuffer, cardId) {
-  const screenshotsDir = path.join(process.cwd(), 'public', 'screenshots');
-  if (!fs.existsSync(screenshotsDir)) {
-    fs.mkdirSync(screenshotsDir, { recursive: true });
+  if (!fs.existsSync(SCREENSHOTS_DIR)) {
+    fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   }
-  const screenshotPath = path.join(screenshotsDir, `${cardId}.png`);
+  const screenshotPath = path.join(SCREENSHOTS_DIR, `${cardId}.png`);
   fs.writeFileSync(screenshotPath, screenshotBuffer);
   return `/screenshots/${cardId}.png`;
 }
 
-// Playwright 错误映射到友好消息
 function getFriendlyError(errorMessage) {
   if (!errorMessage) return '提取失败，请稍后重试';
 
@@ -62,25 +39,19 @@ function getFriendlyError(errorMessage) {
   return '提取失败，请稍后重试';
 }
 
-// 检查网站是否已提取过
 async function findExistingCard(normalizedHost) {
-  const db = await getDb();
-  try {
-    // 查询所有卡片，检查是否有匹配的 normalized URL
-    const stmt = db.prepare('SELECT id, url, name FROM cards');
-    while (stmt.step()) {
-      const [id, url, name] = stmt.get();
-      const normalized = normalizeUrl(url);
-      if (normalized.normalized === normalizedHost) {
-        stmt.free();
-        return { id, url, name };
-      }
+  const db = getDb();
+  const result = await db.execute({
+    sql: 'SELECT id, url, name FROM cards WHERE url LIKE ?',
+    args: [`%${normalizedHost}%`],
+  });
+  for (const row of result.rows) {
+    const normalized = normalizeUrl(row.url);
+    if (normalized.normalized === normalizedHost) {
+      return { id: row.id, url: row.url, name: row.name };
     }
-    stmt.free();
-    return null;
-  } finally {
-    db.close();
   }
+  return null;
 }
 
 export async function POST(request) {
@@ -90,18 +61,15 @@ export async function POST(request) {
     return Response.json({ success: false, error: '请输入网址' }, { status: 400 });
   }
 
-  // URL 验证
   if (!isValidDomain(url)) {
     return Response.json({ success: false, error: '请输入有效的网址' }, { status: 400 });
   }
 
-  // URL 规范化
   const normalized = normalizeUrl(url);
   if (!normalized.valid) {
     return Response.json({ success: false, error: '请输入有效的网址' }, { status: 400 });
   }
 
-  let db;
   let cardId;
   let screenshotPath = null;
 
@@ -115,16 +83,15 @@ export async function POST(request) {
         cardId: existing.id,
         isDuplicate: true,
         message: '该网站已提取过',
-        siteName: existing.name
+        siteName: existing.name,
       });
     }
 
     console.log('[extract] Extracting from:', normalized.full);
 
-    // 提取（使用规范化后的 URL）
     const result = await extractDesignTokens(normalized.full, {
       useAI: true,
-      captureScreenshot: true
+      captureScreenshot: true,
     });
 
     if (!result.success) {
@@ -132,80 +99,48 @@ export async function POST(request) {
       console.error('[extract] Extraction failed:', result.error);
       return Response.json({
         success: false,
-        error: friendlyError
+        error: friendlyError,
       }, { status: 500 });
     }
 
-    // 生成 card ID
     cardId = randomUUID();
 
-    // 保存截图
     if (result.screenshot) {
       screenshotPath = saveScreenshot(result.screenshot, cardId);
       console.log('[extract] Screenshot saved:', screenshotPath);
     }
 
-    // 准备卡片数据
     const now = new Date().toISOString();
-    const cardData = {
-      id: cardId,
-      name: result.siteName,
-      url: normalized.full,
-      preview: screenshotPath,
-      screenshot: screenshotPath,
-      colors: JSON.stringify(result.colors || []),
-      fonts: JSON.stringify(result.fonts || []),
-      north_star: result.northStar || null,
-      color_scheme: result.colorScheme || 'light',
-      category: result.category || 'minimal',
-      typography: JSON.stringify(result.typography || {}),
-      type_scale: JSON.stringify(result.typeScale || {}),
-      gradient: JSON.stringify(result.gradient || []),
-      raw_data: JSON.stringify({}),
-      created_at: now
-    };
 
-    // 验证卡片数据
-    if (!cardData.name || !cardData.id) {
+    if (!result.siteName || !cardId) {
       throw new Error('Invalid card data: missing required fields');
     }
 
-    // 保存到数据库
-    db = await getDb();
-    try {
-      db.run(`
-        INSERT INTO cards (
-          id, name, url, preview, screenshot, colors, fonts,
-          north_star, color_scheme, category, typography,
-          type_scale, gradient, raw_data, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        cardData.id,
-        cardData.name,
-        cardData.url,
-        cardData.preview,
-        cardData.screenshot,
-        cardData.colors,
-        cardData.fonts,
-        cardData.north_star,
-        cardData.color_scheme,
-        cardData.category,
-        cardData.typography,
-        cardData.type_scale,
-        cardData.gradient,
-        cardData.raw_data,
-        cardData.created_at
-      ]);
-      saveDb(db);
-    } finally {
-      db.close();
-    }
+    // 写入 Turso
+    const db = getDb();
+    await db.execute({
+      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        cardId,
+        result.siteName,
+        normalized.full,
+        screenshotPath,
+        screenshotPath,
+        JSON.stringify(result.colors || []),
+        JSON.stringify(result.fonts || []),
+        result.northStar || null,
+        result.colorScheme || 'light',
+        result.category || 'minimal',
+        now,
+      ],
+    });
 
     console.log('[extract] Card saved:', cardId);
 
     return Response.json({
       success: true,
-      cardId: cardId,
+      cardId,
       isDuplicate: false,
       designMd: result.designMd,
       siteName: result.siteName,
@@ -219,11 +154,10 @@ export async function POST(request) {
       category: result.category,
       screenshot: screenshotPath,
       cssSize: result.cssSize,
-      version: 'v2'
+      version: 'v2',
     });
   } catch (error) {
     console.error('[extract] Error:', error.message);
-    // 清理截图
     if (screenshotPath) {
       try {
         fs.unlinkSync(path.join(process.cwd(), 'public', screenshotPath));
@@ -231,7 +165,7 @@ export async function POST(request) {
     }
     return Response.json(
       { success: false, error: getFriendlyError(error.message) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
