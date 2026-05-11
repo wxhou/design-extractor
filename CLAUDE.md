@@ -1,5 +1,13 @@
 # design-extractor
 
+## 部署架构
+
+- **Vercel（源站）**: https://design-extractor-five.vercel.app
+- **Cloudflare Worker（国内反代理）**: https://design-extractor.wxhou.workers.dev
+- **数据库**: Turso (libSQL)，连接信息在 `.env.local`
+- **国内访问一律使用反代理地址**，不直接访问 Vercel
+- **反代理代码**: `cloudflare-proxy/` 目录，修改后 `cd cloudflare-proxy && npx wrangler deploy` 更新
+
 <!-- OPENSPEC:START -->
 
 # Claude Code Employee-Grade Standards
