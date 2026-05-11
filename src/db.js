@@ -11,7 +11,8 @@ export function getDb() {
       throw new Error('Missing TURSO_URL or TURSO_AUTH_TOKEN environment variables');
     }
 
-    client = createClient({ url, authToken });
+    const httpsUrl = url.replace(/^libsql:\/\//, 'https://');
+    client = createClient({ url: httpsUrl, authToken });
   }
   return client;
 }
