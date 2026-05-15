@@ -17,6 +17,7 @@
     "better-sqlite3": "^11.7.0",
     "cheerio": "^1.2.0",
     "chromium-bidi": "^15.0.0",
+    "jsonrepair": "^3.14.0",
     "next": "^16.2.4",
     "openai": "^6.36.0",
     "playwright": "^1.59.1",

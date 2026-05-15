@@ -5,7 +5,7 @@
  * 从渲染后的 DOM 提取设计 tokens，配合 MiniMax AI 生成语义化命名
  */
 
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-core';
 import OpenAI from 'openai';
 
 // ============================================================
@@ -805,6 +805,60 @@ Requirements:
 Output JSON format:
 {"colors":[{"hex":"#0071e3","name":"Azure","group":"brand","role":"Primary CTA button fill — the sole permission-to-act color on the entire page"}],"northStar":"Gallery wall at natural light — enormous type casts shadows on a white surface"}`;
 
+// ============================================================
+// 6.1 AI 响应解析工具
+// ============================================================
+
+/**
+ * 去除 thinking blocks
+ */
+function stripThinkingBlocks(text) {
+  return text
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .replace(/<think>[\s\S]*?<\/think(ing)?>/gi, '')
+    .replace(/\[\/S\]/g, '')  // 清除残留标记
+    .trim();
+}
+
+/**
+ * 深度计数提取 JSON（非贪婪）
+ */
+function extractJSONByDepth(text) {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * 解析 AI 响应（支持修复尾部乱码）
+ */
+async function parseAIResponse(text) {
+  const cleaned = stripThinkingBlocks(text);
+  const json = extractJSONByDepth(cleaned);
+  if (!json) return null;
+
+  try {
+    return JSON.parse(json);
+  } catch {
+    // 尝试修复尾部乱码
+    try {
+      const { repair } = await import('jsonrepair');
+      return JSON.parse(repair(json));
+    } catch {
+      return null;
+    }
+  }
+}
+
 /**
  * 使用 AI 增强颜色数据
  */
@@ -860,14 +914,20 @@ Generate semantic names and design philosophy.`;
 
     const content = response.choices[0].message.content;
 
-    // Extract JSON from response (handle thinking blocks)
-    let jsonStr = content;
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0];
+    // Extract JSON from response (robust parsing with jsonrepair fallback)
+    const enriched = await parseAIResponse(content);
+    if (!enriched) {
+      console.warn('AI response parse failed, using rule-based inference');
+      return {
+        ...baseData,
+        colors: baseData.colors.map(c => ({
+          ...c,
+          name: inferColorName(c.hex, c.contexts),
+          group: inferColorGroup(c.contexts, c.hex),
+          role: generateColorRole(c, c.contexts)
+        }))
+      };
     }
-
-    const enriched = JSON.parse(jsonStr);
 
     // 合并 AI 增强数据
     const colorMap = new Map();
@@ -914,7 +974,220 @@ Generate semantic names and design philosophy.`;
 }
 
 // ============================================================
-// 7. Markdown 生成
+// 7. 多格式输出工具
+// ============================================================
+
+/**
+ * Convert a name to a valid CSS custom property segment (kebab-case, alphanumeric only)
+ */
+export function toCssName(name) {
+  return name
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Generate DTCG standard tokens.json
+ * @see https://design-tokens.github.io/community-group/format/
+ */
+export function generateTokensJson(data) {
+  const { colors = [], fonts = [], typeScale, gradients = [], northStar, siteName } = data;
+
+  const tokens = {
+    $schema: 'https://design-tokens.github.io/community-group/format/',
+  };
+
+  // Colors grouped by semantic role
+  if (colors.length > 0) {
+    tokens.colors = {};
+    for (const c of colors) {
+      const key = toCssName(c.name || c.hex);
+      tokens.colors[key] = {
+        $value: c.hex,
+        $type: 'color',
+        $description: c.role || `${c.name} color`,
+      };
+      if (c.group) tokens.colors[key].$extensions = { group: c.group };
+    }
+  }
+
+  // Gradients
+  if (gradients.length > 0) {
+    tokens.gradients = {};
+    for (let i = 0; i < gradients.length; i++) {
+      const g = gradients[i];
+      const key = toCssName(g.type || `gradient-${i + 1}`);
+      tokens.gradients[key] = {
+        $value: g.value || g.css || '',
+        $type: 'gradient',
+        $description: `${g.type || 'linear'} gradient`,
+      };
+    }
+  }
+
+  // Typography
+  if (fonts.length > 0 || (typeScale && typeScale.steps && typeScale.steps.length > 0)) {
+    tokens.typography = {};
+
+    if (fonts.length > 0) {
+      tokens.typography.fontFamily = {};
+      for (const f of fonts) {
+        const key = toCssName(f.fontFamily);
+        tokens.typography.fontFamily[key] = {
+          $value: [f.fontFamily],
+          $type: 'fontFamily',
+        };
+      }
+    }
+
+    if (typeScale && typeScale.steps && typeScale.steps.length > 0) {
+      tokens.typography.fontSize = {};
+      for (const step of typeScale.steps) {
+        const key = toCssName(step.name || step.role || `step-${step.size}`);
+        tokens.typography.fontSize[key] = {
+          $value: typeof step.size === 'number' ? `${step.size}px` : step.size,
+          $type: 'dimension',
+        };
+      }
+    }
+  }
+
+  tokens.$metadata = {
+    name: siteName || 'Design Tokens',
+    northStar: northStar || '',
+  };
+
+  return JSON.stringify(tokens, null, 2);
+}
+
+/**
+ * Generate CSS custom properties (variables.css)
+ */
+export function generateVariablesCss(data) {
+  const { colors = [], fonts = [], typeScale, gradients = [] } = data;
+
+  const lines = [':root {'];
+
+  // Colors grouped by semantic category
+  if (colors.length > 0) {
+    const brand = colors.filter(c => c.group === 'brand');
+    const accent = colors.filter(c => c.group === 'accent');
+    const neutral = colors.filter(c => c.group === 'neutral');
+
+    if (brand.length > 0) {
+      lines.push('  /* Brand Colors */');
+      for (const c of brand) lines.push(`  --color-${toCssName(c.name || c.hex)}: ${c.hex};`);
+      lines.push('');
+    }
+    if (accent.length > 0) {
+      lines.push('  /* Accent Colors */');
+      for (const c of accent) lines.push(`  --color-${toCssName(c.name || c.hex)}: ${c.hex};`);
+      lines.push('');
+    }
+    if (neutral.length > 0) {
+      lines.push('  /* Neutral Colors */');
+      for (const c of neutral) lines.push(`  --color-${toCssName(c.name || c.hex)}: ${c.hex};`);
+      lines.push('');
+    }
+    // Ungrouped
+    const ungrouped = colors.filter(c => !c.group);
+    if (ungrouped.length > 0) {
+      lines.push('  /* Other Colors */');
+      for (const c of ungrouped) lines.push(`  --color-${toCssName(c.name || c.hex)}: ${c.hex};`);
+      lines.push('');
+    }
+  }
+
+  // Gradients
+  if (gradients.length > 0) {
+    lines.push('  /* Gradients */');
+    for (let i = 0; i < gradients.length; i++) {
+      const g = gradients[i];
+      lines.push(`  --gradient-${toCssName(g.type || `gradient-${i + 1}`)}: ${g.value || g.css || ''};`);
+    }
+    lines.push('');
+  }
+
+  // Font families
+  if (fonts.length > 0) {
+    lines.push('  /* Font Families */');
+    for (const f of fonts) {
+      const fallback = f.source === 'google' ? ', sans-serif' : f.source === 'system' ? ', system-ui, sans-serif' : ', sans-serif';
+      lines.push(`  --font-family-${toCssName(f.fontFamily)}: "${f.fontFamily}"${fallback};`);
+    }
+    lines.push('');
+  }
+
+  // Font sizes
+  if (typeScale && typeScale.steps && typeScale.steps.length > 0) {
+    lines.push('  /* Font Sizes */');
+    for (const step of typeScale.steps) {
+      lines.push(`  --font-size-${toCssName(step.name || step.role || `step-${step.size}`)}: ${step.size}px;`);
+    }
+    if (typeScale.base) lines.push(`  --font-size-base: ${typeScale.base}px;`);
+    lines.push('');
+  }
+
+  // Remove trailing blank line before closing
+  while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  lines.push('}');
+  return lines.join('\n');
+}
+
+/**
+ * Generate Tailwind v4 @theme directive (theme.css)
+ */
+export function generateThemeCss(data) {
+  const { colors = [], fonts = [], typeScale, gradients = [] } = data;
+
+  const lines = ['@theme {'];
+
+  // Colors
+  if (colors.length > 0) {
+    lines.push('  /* Colors */');
+    for (const c of colors) {
+      lines.push(`  --color-${toCssName(c.name || c.hex)}: ${c.hex};`);
+    }
+    lines.push('');
+  }
+
+  // Gradients
+  if (gradients.length > 0) {
+    lines.push('  /* Gradients */');
+    for (let i = 0; i < gradients.length; i++) {
+      const g = gradients[i];
+      lines.push(`  --gradient-${toCssName(g.type || `gradient-${i + 1}`)}: ${g.value || g.css || ''};`);
+    }
+    lines.push('');
+  }
+
+  // Font families
+  if (fonts.length > 0) {
+    lines.push('  /* Font Families */');
+    for (const f of fonts) {
+      lines.push(`  --font-family-${toCssName(f.fontFamily)}: "${f.fontFamily}", sans-serif;`);
+    }
+    lines.push('');
+  }
+
+  // Font sizes
+  if (typeScale && typeScale.steps && typeScale.steps.length > 0) {
+    lines.push('  /* Font Sizes */');
+    for (const step of typeScale.steps) {
+      lines.push(`  --font-size-${toCssName(step.name || step.role || `step-${step.size}`)}: ${step.size}px;`);
+    }
+    if (typeScale.base) lines.push(`  --font-size-base: ${typeScale.base}px;`);
+    lines.push('');
+  }
+
+  while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  lines.push('}');
+  return lines.join('\n');
+}
+
+// ============================================================
+// 8. Markdown 生成
 // ============================================================
 
 /**
@@ -1006,7 +1279,29 @@ north_star: "${northStar || ''}"
 export async function extractDesignTokens(url, options = {}) {
   const startTime = Date.now();
 
-  const browser = await chromium.launch({ headless: true });
+  let browser;
+  const browserlessToken = process.env.BROWSERLESS_TOKEN;
+  if (browserlessToken) {
+    // Fetch fresh WebSocket URL from Browserless CDP endpoint
+    console.error(`[extractor-v2] Getting Browserless WebSocket URL...`);
+    const versionResp = await fetch(`https://chrome.browserless.io/json/version?token=${browserlessToken}`);
+    const versionData = await versionResp.json();
+    const wsEndpoint = versionData.webSocketDebuggerUrl + (versionData.webSocketDebuggerUrl.includes('?') ? '&' : '?') + `token=${browserlessToken}`;
+    console.error(`[extractor-v2] Connecting to Browserless: ${wsEndpoint.replace(/\/\/.*@/, '//***@')}`);
+    browser = await chromium.connect(wsEndpoint);
+  } else {
+    const chromiumPath = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: chromiumPath,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+    });
+  }
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
@@ -1033,10 +1328,15 @@ export async function extractDesignTokens(url, options = {}) {
     await page.waitForTimeout(1000); // 等待渲染
 
     // 2. 获取站点名称
-    const siteName = await page.title().catch(() => {
+    let siteName = '';
+    try {
+      siteName = await page.title();
+    } catch {}
+    // page.title() 可能返回空字符串而非异常，fallback 到 URL 域名
+    if (!siteName) {
       const match = targetUrl.match(/https?:\/\/([^\/]+)/);
-      return match ? match[1].replace('www.', '') : 'Unknown';
-    });
+      siteName = match ? match[1].replace('www.', '') : 'Unknown';
+    }
 
     // 3. 提取样式数据
     console.error(`[extractor-v2] Extracting styles...`);
@@ -1086,11 +1386,24 @@ export async function extractDesignTokens(url, options = {}) {
     const colorScheme = inferColorScheme(enrichedData.colors);
     const category = inferCategory(enrichedData.colors, colorScheme);
 
-    // 11. 截图
+    // 11. 截图（失败不影响主流程）
     let screenshotBuffer = null;
     if (options.captureScreenshot) {
       console.error(`[extractor-v2] Capturing screenshot...`);
-      screenshotBuffer = await page.screenshot({ type: 'png', fullPage: true });
+      try {
+        screenshotBuffer = await page.screenshot({ type: 'png', fullPage: true });
+        console.error(`[extractor-v2] Screenshot captured: ${screenshotBuffer?.length || 0} bytes`);
+      } catch (screenshotErr) {
+        console.error(`[extractor-v2] Screenshot failed (non-fatal): ${screenshotErr.message}`);
+        // 降级：尝试截取可见区域
+        try {
+          screenshotBuffer = await page.screenshot({ type: 'png', fullPage: false });
+          console.error(`[extractor-v2] Fallback screenshot captured: ${screenshotBuffer?.length || 0} bytes`);
+        } catch (fallbackErr) {
+          console.error(`[extractor-v2] Fallback screenshot also failed: ${fallbackErr.message}`);
+          screenshotBuffer = null;
+        }
+      }
     }
 
     // 12. 组装最终响应

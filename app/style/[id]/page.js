@@ -47,6 +47,15 @@ function CheckIcon() {
   );
 }
 
+function DownloadIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d="M6 2v6M3.5 5.5L6 8l2.5-2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M2 10h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 // i18n translations
 const T = {
   en: {
@@ -93,6 +102,7 @@ const T = {
     designTokens: 'Design Tokens',
     copy: 'Copy',
     copied: 'Copied!',
+    download: 'Download',
     // Preview
     visitSite: 'Visit site',
   },
@@ -140,6 +150,7 @@ const T = {
     designTokens: '设计令牌',
     copy: '复制',
     copied: '已复制！',
+    download: '下载',
     // Preview
     visitSite: '访问网站',
   }
@@ -243,6 +254,10 @@ export default function StylePage() {
     if (!card.raw_data) return {};
     try { return JSON.parse(card.raw_data); } catch { return {}; }
   })();
+  // 多格式导出数据（优先使用服务端预生成，兜底客户端生成）
+  const tokensJson = rawData.tokensJson || '';
+  const variablesCss = rawData.variablesCss || '';
+  const themeCss = rawData.themeCss || '';
   // imagery/layout can be array, object, or plain string description — handle all cases
   const imageryData = (() => {
     const val = rawData?.designSystem?.imagery;
@@ -350,61 +365,55 @@ export default function StylePage() {
     return md;
   }
 
+  function toCssName(name) {
+    return name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  }
+
   function getFormatCode(fmt) {
+    // 优先使用服务端预生成的格式
+    if (fmt === 'CSS Variables' && variablesCss) return variablesCss;
+    if (fmt === 'Tailwind v4' && themeCss) return themeCss;
+    if (fmt === 'Design Tokens' && tokensJson) return tokensJson;
+
+    // 兜底：客户端生成
     if (fmt === 'CSS Variables') {
-      let css = ':root {\n';
-      colors.forEach(c => { css += `  --color-${(c.name||c.hex||'').replace(/[^a-z0-9]/gi,'-').toLowerCase()}: ${c.hex};\n`; });
-      gradients.forEach(g => { css += `  --gradient-${(g.name||'g').replace(/[^a-z0-9]/gi,'-').toLowerCase()}: ${typeof g==='string'?g:g.value};\n`; });
-      fonts.forEach((f,i) => { css += `  --font-${(f.fontFamily||`font-${i}`).replace(/[^a-z0-9]/gi,'-').toLowerCase()}: "${f.fontFamily}", sans-serif;\n`; });
-      if (typeScale?.base) css += `  --type-base: ${typeScale.base}px;\n`;
-      css += '}\n';
-      return css;
-    } else if (fmt === 'Tailwind Config') {
-      const obj = { colors: {}, fontFamily: {} };
-      colors.forEach(c => { obj.colors[(c.name||c.hex||'').replace(/[^a-z0-9]/gi,'_')] = c.hex; });
-      fonts.forEach((f,i) => { obj.fontFamily[(f.fontFamily||`font_${i}`).replace(/[^a-z0-9]/gi,'_').toLowerCase()] = `"${f.fontFamily}", sans-serif`; });
-      return `module.exports = { theme: { extend: ${JSON.stringify(obj, null, 2)} } }`;
+      const lines = [':root {'];
+      const brand = colors.filter(c => c.group === 'brand');
+      const accent = colors.filter(c => c.group === 'accent');
+      const neutral = colors.filter(c => c.group === 'neutral');
+      if (brand.length > 0) { lines.push('  /* Brand Colors */'); brand.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
+      if (accent.length > 0) { lines.push('  /* Accent Colors */'); accent.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
+      if (neutral.length > 0) { lines.push('  /* Neutral Colors */'); neutral.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
+      const other = colors.filter(c => !c.group);
+      if (other.length > 0) { lines.push('  /* Other Colors */'); other.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
+      if (gradients.length > 0) { lines.push('  /* Gradients */'); gradients.forEach((g,i) => lines.push(`  --gradient-${toCssName(g.type||`gradient-${i+1}`)}: ${g.value||g.css||g};`)); lines.push(''); }
+      if (fonts.length > 0) { lines.push('  /* Font Families */'); fonts.forEach(f => lines.push(`  --font-family-${toCssName(f.fontFamily)}: "${f.fontFamily}", sans-serif;`)); lines.push(''); }
+      if (typeScale?.steps?.length > 0) { lines.push('  /* Font Sizes */'); typeScale.steps.forEach(s => lines.push(`  --font-size-${toCssName(s.name||s.role||`step-${s.size}`)}: ${s.size}px;`)); if (typeScale.base) lines.push(`  --font-size-base: ${typeScale.base}px;`); lines.push(''); }
+      while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+      lines.push('}');
+      return lines.join('\n');
+    } else if (fmt === 'Tailwind v4') {
+      const lines = ['@theme {'];
+      if (colors.length > 0) { lines.push('  /* Colors */'); colors.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
+      if (gradients.length > 0) { lines.push('  /* Gradients */'); gradients.forEach((g,i) => lines.push(`  --gradient-${toCssName(g.type||`gradient-${i+1}`)}: ${g.value||g.css||g};`)); lines.push(''); }
+      if (fonts.length > 0) { lines.push('  /* Font Families */'); fonts.forEach(f => lines.push(`  --font-family-${toCssName(f.fontFamily)}: "${f.fontFamily}", sans-serif;`)); lines.push(''); }
+      if (typeScale?.steps?.length > 0) { lines.push('  /* Font Sizes */'); typeScale.steps.forEach(s => lines.push(`  --font-size-${toCssName(s.name||s.role||`step-${s.size}`)}: ${s.size}px;`)); if (typeScale.base) lines.push(`  --font-size-base: ${typeScale.base}px;`); lines.push(''); }
+      while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+      lines.push('}');
+      return lines.join('\n');
     } else {
-      return JSON.stringify({ colors, fonts, gradients, typeScale }, null, 2);
+      // DTCG standard Design Tokens JSON
+      const tokens = { $schema: 'https://design-tokens.github.io/community-group/format/' };
+      if (colors.length > 0) { tokens.colors = {}; colors.forEach(c => { tokens.colors[toCssName(c.name||c.hex)] = { $value: c.hex, $type: 'color', $description: c.role || `${c.name||c.hex} color` }; }); }
+      if (gradients.length > 0) { tokens.gradients = {}; gradients.forEach((g,i) => { tokens.gradients[toCssName(g.type||`gradient-${i+1}`)] = { $value: g.value||g.css||'', $type: 'gradient' }; }); }
+      if (fonts.length > 0 || typeScale?.steps?.length > 0) { tokens.typography = {}; if (fonts.length > 0) { tokens.typography.fontFamily = {}; fonts.forEach(f => { tokens.typography.fontFamily[toCssName(f.fontFamily)] = { $value: [f.fontFamily], $type: 'fontFamily' }; }); } if (typeScale?.steps?.length > 0) { tokens.typography.fontSize = {}; typeScale.steps.forEach(s => { tokens.typography.fontSize[toCssName(s.name||s.role||`step-${s.size}`)] = { $value: `${s.size}px`, $type: 'dimension' }; }); } }
+      tokens.$metadata = { name: card?.name || 'Design Tokens' };
+      return JSON.stringify(tokens, null, 2);
     }
   }
 
   function getExportCode() {
-    if (exportFormat === 'CSS Variables') {
-      let css = ':root {\n';
-      colors.forEach(c => {
-        const name = (c.name || c.hex || '').replace(/[^a-z0-9]/gi, '-').toLowerCase();
-        css += `  --color-${name}: ${c.hex};\n`;
-      });
-      gradients.forEach(g => {
-        const name = (g.name || g.value || 'gradient').replace(/[^a-z0-9]/gi, '-').toLowerCase();
-        css += `  --gradient-${name}: ${g.value || g};\n`;
-      });
-      fonts.forEach((f, i) => {
-        const name = (f.fontFamily || `font-${i}`).replace(/[^a-z0-9]/gi, '-').toLowerCase();
-        css += `  --font-${name}: "${f.fontFamily}", sans-serif;\n`;
-      });
-      if (typeScale?.base) css += `  --type-base: ${typeScale.base}px;\n`;
-      css += '}\n';
-      return css;
-    } else if (exportFormat === 'Tailwind Config') {
-      const obj = {
-        colors: {},
-        fontFamily: {},
-        borderRadius: {},
-      };
-      colors.forEach(c => {
-        const name = (c.name || c.hex || '').replace(/[^a-z0-9]/gi, '_');
-        obj.colors[name] = c.hex;
-      });
-      fonts.forEach((f, i) => {
-        const name = (f.fontFamily || `font_${i}`).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        obj.fontFamily[name] = `"${f.fontFamily}", sans-serif`;
-      });
-      return `module.exports = { theme: { extend: ${JSON.stringify(obj, null, 2)} } }`;
-    } else {
-      return JSON.stringify({ colors, fonts, gradients, typeScale }, null, 2);
-    }
+    return getFormatCode(exportFormat);
   }
 
   return (
@@ -785,11 +794,27 @@ export default function StylePage() {
               ))}
             </div>
             <div className="right-panel-content">
-              <button className="right-copy-btn" onClick={() => copyText(rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind Config' : rightTab === 'CSS' ? 'CSS Variables' : 'JSON'), 'export')}>
-                <CopyIcon /> {T[locale].copy}
-              </button>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                <button className="right-copy-btn" onClick={() => copyText(rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens'), 'export')}>
+                  <CopyIcon /> {T[locale].copy}
+                </button>
+                <button className="right-copy-btn" onClick={() => {
+                  const content = rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens');
+                  const name = card?.name || 'design';
+                  const filenames = { 'DESIGN.md': `${name}.md`, 'TAILWIND': `${name}.theme.css`, 'CSS': `${name}.variables.css`, 'TOKENS': `${name}.tokens.json` };
+                  const mime = rightTab === 'Design Tokens' ? 'application/json' : 'text/plain';
+                  const blob = new Blob([content], { type: mime });
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = filenames[rightTab] || `${name}.txt`;
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                }}>
+                  <DownloadIcon /> {T[locale].download}
+                </button>
+              </div>
               <pre className="right-code">
-                {rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind Config' : rightTab === 'CSS' ? 'CSS Variables' : 'JSON')}
+                {rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens')}
               </pre>
             </div>
           </div>

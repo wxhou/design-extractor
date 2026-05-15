@@ -298,6 +298,21 @@ export default function Home() {
     }
   }
 
+  // 进度状态映射
+  const getProgressText = (status) => {
+    const texts = {
+      starting: locale === 'zh' ? '准备中...' : 'Preparing...',
+      checking_duplicate: locale === 'zh' ? '检查重复...' : 'Checking duplicates...',
+      extracting: locale === 'zh' ? '正在分析网页...' : 'Analyzing page...',
+      processing_result: locale === 'zh' ? '处理结果...' : 'Processing result...',
+      saving: locale === 'zh' ? '保存数据...' : 'Saving data...',
+      saving_to_db: locale === 'zh' ? '写入数据库...' : 'Writing to database...',
+      done: locale === 'zh' ? '完成!' : 'Done!',
+      error: locale === 'zh' ? '出错' : 'Error'
+    };
+    return texts[status] || status;
+  }
+
   function handleCardClick(id) {
     router.push(`/style/${id}`);
   }
@@ -495,7 +510,7 @@ export default function Home() {
         {loading && (
           <div className="loading-wrap">
             <div className="loading-spinner" />
-            <div className="loading-text">Analyzing {url}...</div>
+            <div className="loading-text">{locale === 'zh' ? '正在提取 ' : 'Extracting '}{url}</div>
           </div>
         )}
 

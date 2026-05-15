@@ -4,6 +4,9 @@ import { Agentation } from 'agentation'
 export const metadata = {
   title: 'Design Extractor',
   description: 'Extract DESIGN.md tokens from any website',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({ children }) {

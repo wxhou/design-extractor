@@ -1,18 +1,21 @@
-import { extractDesignTokens, isValidDomain, normalizeUrl } from '../../../src/extractor-v2.js';
+import { extractDesignTokens, isValidDomain, normalizeUrl, generateTokensJson, generateVariablesCss, generateThemeCss } from '../../../src/extractor-v2.js';
 import { getDb } from '../../../src/db.js';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
+// screenshots 目录：直接使用 public/screenshots
 const SCREENSHOTS_DIR = path.join(process.cwd(), 'public', 'screenshots');
 
 function saveScreenshot(screenshotBuffer, cardId) {
+  if (!screenshotBuffer) return null;
   if (!fs.existsSync(SCREENSHOTS_DIR)) {
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   }
   const screenshotPath = path.join(SCREENSHOTS_DIR, `${cardId}.png`);
   fs.writeFileSync(screenshotPath, screenshotBuffer);
-  return `/screenshots/${cardId}.png`;
+  // 使用 API 端点来服务截图，这样无论 Docker 容器如何配置都能正常工作
+  return `/api/screenshots/${cardId}.png`;
 }
 
 function getFriendlyError(errorMessage) {
@@ -40,7 +43,7 @@ function getFriendlyError(errorMessage) {
 }
 
 async function findExistingCard(normalizedHost) {
-  const db = getDb();
+  const db = await getDb();
   const result = await db.execute({
     sql: 'SELECT id, url, name FROM cards WHERE url LIKE ?',
     args: [`%${normalizedHost}%`],
@@ -53,6 +56,8 @@ async function findExistingCard(normalizedHost) {
   }
   return null;
 }
+
+const extractionJobs = new Map();
 
 export async function POST(request) {
   const { url } = await request.json();
@@ -73,20 +78,27 @@ export async function POST(request) {
   let cardId;
   let screenshotPath = null;
 
+  const jobId = randomUUID();
+  extractionJobs.set(jobId, { status: 'starting', progress: 0 });
+
   try {
     // 检查重复
+    extractionJobs.set(jobId, { status: 'checking_duplicate', progress: 10 });
     const existing = await findExistingCard(normalized.normalized);
     if (existing) {
       console.log('[extract] Duplicate found:', existing.id);
+      extractionJobs.set(jobId, { status: 'done', progress: 100, cardId: existing.id, isDuplicate: true });
       return Response.json({
         success: true,
         cardId: existing.id,
         isDuplicate: true,
         message: '该网站已提取过',
         siteName: existing.name,
+        jobId,
       });
     }
 
+    extractionJobs.set(jobId, { status: 'extracting', progress: 20 });
     console.log('[extract] Extracting from:', normalized.full);
 
     const result = await extractDesignTokens(normalized.full, {
@@ -94,9 +106,12 @@ export async function POST(request) {
       captureScreenshot: true,
     });
 
+    extractionJobs.set(jobId, { status: 'processing_result', progress: 80 });
+
     if (!result.success) {
       const friendlyError = getFriendlyError(result.error);
       console.error('[extract] Extraction failed:', result.error);
+      extractionJobs.set(jobId, { status: 'error', progress: 100, error: friendlyError });
       return Response.json({
         success: false,
         error: friendlyError,
@@ -104,10 +119,14 @@ export async function POST(request) {
     }
 
     cardId = randomUUID();
+    extractionJobs.set(jobId, { status: 'saving', progress: 85 });
 
+    // 保存截图（截图失败不影响主流程）
     if (result.screenshot) {
       screenshotPath = saveScreenshot(result.screenshot, cardId);
       console.log('[extract] Screenshot saved:', screenshotPath);
+    } else {
+      console.log('[extract] No screenshot captured');
     }
 
     const now = new Date().toISOString();
@@ -116,11 +135,32 @@ export async function POST(request) {
       throw new Error('Invalid card data: missing required fields');
     }
 
-    // 写入 Turso
-    const db = getDb();
+    // 生成多格式输出
+    const tokensJson = generateTokensJson(result);
+    const variablesCss = generateVariablesCss(result);
+    const themeCss = generateThemeCss(result);
+
+    // 写入数据库（Turso 或本地 SQLite）- 使用 UPSERT 保证幂等
+    extractionJobs.set(jobId, { status: 'saving_to_db', progress: 90 });
+    const db = await getDb();
     await db.execute({
-      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, raw_data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              url = excluded.url,
+              preview = excluded.preview,
+              screenshot = excluded.screenshot,
+              colors = excluded.colors,
+              fonts = excluded.fonts,
+              north_star = excluded.north_star,
+              color_scheme = excluded.color_scheme,
+              category = excluded.category,
+              typography = excluded.typography,
+              type_scale = excluded.type_scale,
+              gradient = excluded.gradient,
+              raw_data = excluded.raw_data,
+              created_at = excluded.created_at`,
       args: [
         cardId,
         result.siteName,
@@ -132,11 +172,16 @@ export async function POST(request) {
         result.northStar || null,
         result.colorScheme || 'light',
         result.category || 'minimal',
+        JSON.stringify(result.typography || {}),
+        JSON.stringify(result.typeScale || {}),
+        JSON.stringify(result.gradient || []),
+        JSON.stringify({ tokensJson, variablesCss, themeCss }),
         now,
       ],
     });
 
     console.log('[extract] Card saved:', cardId);
+    extractionJobs.set(jobId, { status: 'done', progress: 100, cardId, siteName: result.siteName });
 
     return Response.json({
       success: true,
@@ -155,9 +200,12 @@ export async function POST(request) {
       screenshot: screenshotPath,
       cssSize: result.cssSize,
       version: 'v2',
+      jobId,
     });
   } catch (error) {
-    console.error('[extract] Error:', error.message);
+    console.error('[extract] Error:', error.message, error.stack);
+    extractionJobs.set(jobId, { status: 'error', progress: 100, error: error.message });
+    // 清理截图
     if (screenshotPath) {
       try {
         fs.unlinkSync(path.join(process.cwd(), 'public', screenshotPath));
@@ -168,4 +216,26 @@ export async function POST(request) {
       { status: 500 },
     );
   }
+}
+
+// 获取任务状态（用于进度轮询）
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const jobId = searchParams.get('jobId');
+
+  if (!jobId) {
+    return Response.json({ error: 'Missing jobId' }, { status: 400 });
+  }
+
+  const job = extractionJobs.get(jobId);
+  if (!job) {
+    return Response.json({ error: 'Job not found' }, { status: 404 });
+  }
+
+  // 清理已完成的任务（1小时后）
+  if (job.status === 'done' || job.status === 'error') {
+    setTimeout(() => extractionJobs.delete(jobId), 3600000);
+  }
+
+  return Response.json(job);
 }
