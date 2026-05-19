@@ -39,6 +39,9 @@ Thumbs.db
 *.swp
 *.swo
 
+.claude/
+openspec/
+
 # Testing
 coverage/
 .vercel
