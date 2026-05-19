@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '../../../../../src/db.js';
-import { generateThemeCss } from '../../../../../src/extractor-v2.js';
+import { getDb } from '@/src/db.js';
+import { generateThemeCss } from '@/src/extractor-v2.js';
 
 export async function GET(request, { params }) {
   const { id } = await params;

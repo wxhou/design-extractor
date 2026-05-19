@@ -56,6 +56,22 @@ function DownloadIcon() {
   );
 }
 
+function CodeIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M4 4L1 7l3 3M10 4l3 3-3 3M9 2l-4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 // i18n translations
 const T = {
   en: {
@@ -100,9 +116,26 @@ const T = {
     tailwindV4: 'Tailwind v4',
     cssVariables: 'CSS Variables',
     designTokens: 'Design Tokens',
+    styleDictionary: 'Style Dict',
     copy: 'Copy',
     copied: 'Copied!',
     download: 'Download',
+    // Figma Comparison
+    figmaComparison: 'Figma Comparison',
+    figmaUrlPlaceholder: 'Paste Figma file URL...',
+    compareWithFigma: 'Compare with Figma',
+    compareBtn: 'Compare',
+    comparing: 'Comparing...',
+    matchRate: 'Match Rate',
+    matched: 'Matched',
+    missing: 'Missing',
+    undefined: 'Undefined',
+    colors: 'Colors',
+    typography: 'Typography',
+    shadows: 'Shadows',
+    animation: 'Animation',
+    animationTiming: 'Animation Timing',
+    animationEasing: 'Animation Easing',
     // Preview
     visitSite: 'Visit site',
   },
@@ -148,9 +181,26 @@ const T = {
     tailwindV4: 'Tailwind v4',
     cssVariables: 'CSS 变量',
     designTokens: '设计令牌',
+    styleDictionary: 'Style Dict',
     copy: '复制',
     copied: '已复制！',
     download: '下载',
+    // Figma Comparison
+    figmaComparison: 'Figma 对比',
+    figmaUrlPlaceholder: '粘贴 Figma 文件 URL...',
+    compareWithFigma: '对比 Figma',
+    compareBtn: '对比',
+    comparing: '对比中...',
+    matchRate: '匹配率',
+    matched: '匹配',
+    missing: '缺失',
+    undefined: '未定义',
+    colors: '颜色',
+    typography: '字体',
+    shadows: '阴影',
+    animation: '动效',
+    animationTiming: '动效时间',
+    animationEasing: '缓动函数',
     // Preview
     visitSite: '访问网站',
   }
@@ -171,6 +221,13 @@ export default function StylePage() {
   const [fontPreview, setFontPreview] = useState('The quick brown fox jumps over the lazy dog');
   const [exportFormat, setExportFormat] = useState('CSS Variables');
   const [rightTab, setRightTab] = useState('DESIGN.md');
+  // Figma comparison state
+  const [figmaUrl, setFigmaUrl] = useState('');
+  const [figmaLoading, setFigmaLoading] = useState(false);
+  const [figmaError, setFigmaError] = useState(null);
+  const [comparison, setComparison] = useState(null);
+  // Mobile: toggle code panel
+  const [showCodePanel, setShowCodePanel] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -189,6 +246,28 @@ export default function StylePage() {
     load();
   }, [id]);
 
+  async function compareWithFigma() {
+    if (!figmaUrl.trim()) {
+      setFigmaError(locale === 'zh' ? '请输入 Figma URL' : 'Please enter Figma URL');
+      return;
+    }
+    setFigmaLoading(true);
+    setFigmaError(null);
+    try {
+      const res = await fetch(`/api/comparison?cardId=${id}&figmaUrl=${encodeURIComponent(figmaUrl)}`);
+      const data = await res.json();
+      if (!data.success) {
+        setFigmaError(data.error || 'Comparison failed');
+      } else {
+        setComparison(data.comparison);
+      }
+    } catch (e) {
+      setFigmaError(e.message);
+    } finally {
+      setFigmaLoading(false);
+    }
+  }
+
   async function copyText(text, key) {
     try {
       await navigator.clipboard.writeText(text);
@@ -199,9 +278,42 @@ export default function StylePage() {
 
   if (loading) {
     return (
-      <div className="detail-loading">
-        <div className="detail-spinner" />
-        <span>Loading…</span>
+      <div className="detail-page">
+        <div className="detail-nav">
+          <div className="skeleton-nav" />
+        </div>
+        <div className="detail-main">
+          <div className="detail-content">
+            <div className="detail-content-inner">
+              <div className="skeleton-preview" />
+              <div className="skeleton-title" />
+              <div className="skeleton-colors">
+                {[1,2,3,4].map(i => <div key={i} className="skeleton-color-card" />)}
+              </div>
+              <div className="skeleton-fonts">
+                {[1,2].map(i => <div key={i} className="skeleton-font-item" />)}
+              </div>
+            </div>
+          </div>
+          <div className="detail-deco-col">
+            <div className="skeleton-code-panel" />
+          </div>
+        </div>
+        <style>{`
+          .skeleton-nav { height: 80px; background: var(--bg); border-bottom: 1px solid var(--border); animation: skeleton-pulse 1.5s ease-in-out infinite; }
+          .skeleton-preview { height: 280px; background: var(--bg-card); border-radius: 12px; margin-bottom: 32px; animation: skeleton-pulse 1.5s ease-in-out infinite; }
+          .skeleton-title { height: 36px; width: 60%; background: var(--bg-card); border-radius: 6px; margin-bottom: 16px; animation: skeleton-pulse 1.5s ease-in-out infinite; }
+          .skeleton-colors { display: flex; gap: 10px; margin-bottom: 24px; }
+          .skeleton-color-card { width: 120px; height: 100px; background: var(--bg-card); border-radius: 8px; animation: skeleton-pulse 1.5s ease-in-out infinite; }
+          .skeleton-color-card:nth-child(2) { animation-delay: 0.1s; }
+          .skeleton-color-card:nth-child(3) { animation-delay: 0.2s; }
+          .skeleton-color-card:nth-child(4) { animation-delay: 0.3s; }
+          .skeleton-fonts { display: flex; flex-direction: column; gap: 16px; }
+          .skeleton-font-item { height: 80px; background: var(--bg-card); border-radius: 8px; animation: skeleton-pulse 1.5s ease-in-out infinite; }
+          .skeleton-font-item:nth-child(2) { animation-delay: 0.2s; }
+          .skeleton-code-panel { height: 100%; margin: 16px; background: var(--bg-card); border-radius: 12px; animation: skeleton-pulse 1.5s ease-in-out infinite; }
+          @keyframes skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        `}</style>
       </div>
     );
   }
@@ -326,6 +438,16 @@ export default function StylePage() {
     };
   })();
 
+  // Animations from raw_data.animations
+  const animations = (() => {
+    const rawAnim = rawData?.animations;
+    if (!rawAnim) return null;
+    if (typeof rawAnim === 'string') {
+      try { return JSON.parse(rawAnim); } catch { return null; }
+    }
+    return rawAnim;
+  })();
+
   const catStyle = CATEGORY_COLORS[card.category?.toLowerCase()] || CATEGORY_COLORS.minimal;
   const schemeClass = card.color_scheme === 'dark' ? 'scheme-dark' : 'scheme-light';
 
@@ -410,6 +532,102 @@ export default function StylePage() {
       tokens.$metadata = { name: card?.name || 'Design Tokens' };
       return JSON.stringify(tokens, null, 2);
     }
+  }
+
+  function getStyleDictionary() {
+    // 从 ds.spacing 解析 tokens
+    const spacingTokens = {};
+    if (ds.spacing?.tokens) {
+      Object.entries(ds.spacing.tokens).forEach(([k, v]) => { spacingTokens[k] = v; });
+    } else if (ds.spacing && typeof ds.spacing === 'object') {
+      Object.entries(ds.spacing).forEach(([k, v]) => {
+        if (typeof v === 'object' && v !== null) {
+          Object.entries(v).forEach(([sk, sv]) => { spacingTokens[`${k}-${sk}`] = sv; });
+        } else {
+          spacingTokens[k] = v;
+        }
+      });
+    }
+
+    // 从 raw.shapes 解析 shadows 和 borderRadius
+    const shadowTokens = {};
+    const radiusTokens = {};
+    if (raw.shapes?.shadows) {
+      raw.shapes.shadows.slice(0, 4).forEach((s, i) => {
+        const names = ['sm', 'md', 'lg', 'xl'];
+        shadowTokens[`shadow-${names[i]}`] = typeof s === 'string' ? s : (s.value || s.shadow);
+      });
+    }
+    if (raw.shapes?.radii) {
+      raw.shapes.radii.slice(0, 4).forEach((r, i) => {
+        const names = ['sm', 'md', 'lg', 'full'];
+        radiusTokens[`radius-${names[i]}`] = `${r.value}px`;
+      });
+    }
+
+    const tokenSets = [];
+    const sd = {
+      $schema: 'https://design-tokens.github.io/community-group/format/',
+    };
+
+    // Colors
+    if (colors.length > 0) {
+      sd.color = {};
+      for (const c of colors) {
+        const key = toCssName(c.name || c.hex);
+        sd.color[key] = { $value: c.hex, $type: 'color' };
+        if (c.role) sd.color[key].$description = c.role;
+      }
+      tokenSets.push('color');
+    }
+
+    // Typography
+    if (fonts.length > 0) {
+      sd.typography = { fontFamily: {} };
+      for (const f of fonts) {
+        sd.typography.fontFamily[toCssName(f.fontFamily)] = { $value: [f.fontFamily], $type: 'fontFamily' };
+      }
+      tokenSets.push('typography');
+    }
+
+    // Spacing
+    if (Object.keys(spacingTokens).length > 0) {
+      sd.spacing = {};
+      for (const [name, value] of Object.entries(spacingTokens)) {
+        const key = name.replace('spacing-', '');
+        sd.spacing[toCssName(key)] = { $value: value, $type: 'dimension' };
+      }
+      tokenSets.push('spacing');
+    }
+
+    // Shadows
+    if (Object.keys(shadowTokens).length > 0) {
+      sd.shadow = {};
+      for (const [name, value] of Object.entries(shadowTokens)) {
+        const key = name.replace('shadow-', '');
+        sd.shadow[toCssName(key)] = { $value: value, $type: 'shadow' };
+      }
+      tokenSets.push('shadow');
+    }
+
+    // Border Radius
+    if (Object.keys(radiusTokens).length > 0) {
+      sd.borderRadius = {};
+      for (const [name, value] of Object.entries(radiusTokens)) {
+        const key = name.replace('radius-', '');
+        sd.borderRadius[toCssName(key)] = { $value: value, $type: 'dimension' };
+      }
+      tokenSets.push('borderRadius');
+    }
+
+    sd.$metadata = {
+      name: card?.name || 'Design Tokens',
+      source: card?.url || '',
+      format: 'Style Dictionary',
+      tokenSetOrder: tokenSets,
+    };
+
+    return JSON.stringify(sd, null, 2);
   }
 
   function getExportCode() {
@@ -611,6 +829,41 @@ export default function StylePage() {
             </section>
           )}
 
+          {/* Animation */}
+          {animations && (animations.durationTokens?.tokens || animations.easings) && (
+            <section className="detail-section">
+              <h2 className="detail-section-title">{T[locale].animation}</h2>
+              {animations.durationTokens?.tokens && Object.keys(animations.durationTokens.tokens).length > 0 && (
+                <>
+                  <h3 className="detail-section-subtitle">{T[locale].animationTiming}</h3>
+                  <div className="animation-grid">
+                    {Object.entries(animations.durationTokens.tokens).map(([key, value]) => (
+                      <div key={key} className="animation-item">
+                        <div className="animation-preview" style={{ animationDuration: value }} />
+                        <span className="animation-key">{key}</span>
+                        <span className="animation-val">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {animations.easings && Object.keys(animations.easings).length > 0 && (
+                <>
+                  <h3 className="detail-section-subtitle" style={{marginTop: 16}}>{T[locale].animationEasing}</h3>
+                  <div className="animation-grid">
+                    {Object.entries(animations.easings).slice(0, 6).map(([key, val]) => (
+                      <div key={key} className="animation-item">
+                        <div className="animation-preview" style={{ transitionTimingFunction: key }} />
+                        <span className="animation-key">{key}</span>
+                        <span className="animation-val">{key}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
           {/* Shapes */}
           {raw.shapes && Object.keys(raw.shapes).length > 0 && (
             <section className="detail-section">
@@ -747,38 +1000,89 @@ export default function StylePage() {
             </section>
           )}
 
-          {/* Custom Sections */}
-          {ds.customSections && ds.customSections.length > 0 && (
-            <section className="detail-section">
-              <h2 className="detail-section-title">{T[locale].customSections}</h2>
-              <div className="custom-sections">
-                {ds.customSections.map((sec, i) => (
-                  <div key={i} className="custom-section-item">
-                    {sec.title && <h3 className="custom-section-title">{sec.title}</h3>}
-                    {sec.description && <p className="custom-section-desc">{sec.description}</p>}
-                    {sec.content && <div className="custom-section-content" dangerouslySetInnerHTML={{ __html: sec.content }} />}
-                    {sec.items && sec.items.length > 0 && (
-                      <div className="custom-section-items">
-                        {sec.items.map((item, j) => (
-                          <div key={j} className="custom-section-item-entry">
-                            {item.label && <span className="cs-label">{item.label}</span>}
-                            {item.value && <span className="cs-value">{item.value}</span>}
-                            {item.description && <span className="cs-desc">{item.description}</span>}
+          {/* Figma Comparison */}
+          <section className="detail-section">
+            <h2 className="detail-section-title">{T[locale].figmaComparison}</h2>
+            <div className="figma-compare">
+              <div className="figma-input-row">
+                <input
+                  type="text"
+                  className="figma-url-input"
+                  placeholder={T[locale].figmaUrlPlaceholder}
+                  value={figmaUrl}
+                  onChange={(e) => setFigmaUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && compareWithFigma()}
+                />
+                <button
+                  className="figma-compare-btn"
+                  onClick={compareWithFigma}
+                  disabled={figmaLoading}
+                >
+                  {figmaLoading ? T[locale].comparing : T[locale].compareBtn}
+                </button>
+              </div>
+              {figmaError && (
+                <div className="figma-error">{figmaError}</div>
+              )}
+              {comparison && (
+                <div className="comparison-result">
+                  <div className="comparison-summary">
+                    <div className="match-rate">
+                      <span className="match-rate-label">{T[locale].matchRate}:</span>
+                      <span className="match-rate-value">{comparison.summary.matchRate}%</span>
+                    </div>
+                    <div className="comparison-stats">
+                      <span className="stat-matched">{comparison.summary.matched} {T[locale].matched}</span>
+                      <span className="stat-missing">{comparison.summary.missing} {T[locale].missing}</span>
+                      <span className="stat-undefined">{comparison.summary.undefined} {T[locale].undefined}</span>
+                    </div>
+                  </div>
+                  {comparison.colors.missing.length > 0 && (
+                    <div className="comparison-section">
+                      <h4>{T[locale].colors} - {T[locale].missing}</h4>
+                      <div className="comparison-items">
+                        {comparison.colors.missing.map((c, i) => (
+                          <div key={i} className="comparison-item missing">
+                            <span className="color-swatch-small" style={{ background: c.hex }} />
+                            <span className="color-hex">{c.hex || c.name}</span>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+                    </div>
+                  )}
+                  {comparison.colors.undefined.length > 0 && (
+                    <div className="comparison-section">
+                      <h4>{T[locale].colors} - {T[locale].undefined}</h4>
+                      <div className="comparison-items">
+                        {comparison.colors.undefined.map((c, i) => (
+                          <div key={i} className="comparison-item undefined">
+                            <span className="color-hex">{c.name || c.hex}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Mobile: Code Panel Toggle */}
+          <div className="mobile-code-toggle">
+            <button className="mobile-code-btn" onClick={() => setShowCodePanel(true)}>
+              <CodeIcon /> {locale === 'zh' ? '查看代码' : 'View Code'}
+            </button>
+          </div>
 
           </div>
         </div>
 
         {/* RIGHT: Tabbed Code Panel — matches refero.design */}
-        <div className="detail-deco-col">
+        <div className={`detail-deco-col ${showCodePanel ? 'open' : ''}`}>
+          {/* Mobile close button */}
+          <button className="mobile-close-btn" onClick={() => setShowCodePanel(false)}>
+            <CloseIcon />
+          </button>
           <div className="right-card">
             <div className="right-panel">
             <div className="right-panel-tabs">
@@ -787,6 +1091,7 @@ export default function StylePage() {
                 { key: 'TAILWIND', label: T[locale].tailwindV4 },
                 { key: 'CSS', label: T[locale].cssVariables },
                 { key: 'TOKENS', label: T[locale].designTokens },
+                { key: 'STYLE_DICT', label: T[locale].styleDictionary },
               ].map(tab => (
                 <button key={tab.key} className={`right-tab${rightTab === tab.key ? ' active' : ''}`} onClick={() => setRightTab(tab.key)}>
                   {tab.label}
@@ -795,14 +1100,14 @@ export default function StylePage() {
             </div>
             <div className="right-panel-content">
               <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-                <button className="right-copy-btn" onClick={() => copyText(rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens'), 'export')}>
+                <button className="right-copy-btn" onClick={() => copyText(rightTab === 'DESIGN.md' ? getDesignMd() : (rightTab === 'STYLE_DICT' ? getStyleDictionary() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens')), 'export')}>
                   <CopyIcon /> {T[locale].copy}
                 </button>
                 <button className="right-copy-btn" onClick={() => {
-                  const content = rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens');
+                  const content = rightTab === 'DESIGN.md' ? getDesignMd() : (rightTab === 'STYLE_DICT' ? getStyleDictionary() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens'));
                   const name = card?.name || 'design';
-                  const filenames = { 'DESIGN.md': `${name}.md`, 'TAILWIND': `${name}.theme.css`, 'CSS': `${name}.variables.css`, 'TOKENS': `${name}.tokens.json` };
-                  const mime = rightTab === 'Design Tokens' ? 'application/json' : 'text/plain';
+                  const filenames = { 'DESIGN.md': `${name}.md`, 'TAILWIND': `${name}.theme.css`, 'CSS': `${name}.variables.css`, 'TOKENS': `${name}.tokens.json`, 'STYLE_DICT': `${name}.style-dictionary.json` };
+                  const mime = rightTab === 'Design Tokens' || rightTab === 'STYLE_DICT' ? 'application/json' : 'text/plain';
                   const blob = new Blob([content], { type: mime });
                   const a = document.createElement('a');
                   a.href = URL.createObjectURL(blob);
@@ -814,7 +1119,7 @@ export default function StylePage() {
                 </button>
               </div>
               <pre className="right-code">
-                {rightTab === 'DESIGN.md' ? getDesignMd() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens')}
+                {rightTab === 'DESIGN.md' ? getDesignMd() : (rightTab === 'STYLE_DICT' ? getStyleDictionary() : getFormatCode(rightTab === 'TAILWIND' ? 'Tailwind v4' : rightTab === 'CSS' ? 'CSS Variables' : 'Design Tokens'))}
               </pre>
             </div>
           </div>
@@ -1202,19 +1507,56 @@ export default function StylePage() {
         .export-code-filename { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); }
         .export-copy-btn { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--accent); background: none; border: none; cursor: pointer; font-family: var(--font-sans); padding: 0; }
         .export-code { margin: 0; padding: 14px; font-size: 11px; font-family: var(--font-mono); color: var(--text-dim); overflow-x: auto; white-space: pre; max-height: 300px; overflow-y: auto; line-height: 1.6; }
-        .detail-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 14px; color: var(--text-muted); font-size: 14px; }
-        .detail-spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
         .detail-error { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 14px; color: var(--text-dim); font-size: 14px; }
         .detail-error a { color: var(--accent); text-decoration: none; }
+        /* Figma Comparison */
+        .figma-compare { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; }
+        .figma-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+        .figma-url-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: 12px; font-family: var(--font-sans); }
+        .figma-url-input:focus { outline: none; border-color: var(--accent); }
+        .figma-compare-btn { padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font-sans); transition: opacity 0.15s; }
+        .figma-compare-btn:hover { opacity: 0.85; }
+        .figma-compare-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .figma-error { color: var(--red); font-size: 12px; margin-bottom: 12px; padding: 8px; background: rgba(239,68,68,0.1); border-radius: var(--radius-sm); }
+        .comparison-result { margin-top: 12px; }
+        .comparison-summary { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-subtle); border-radius: var(--radius-sm); margin-bottom: 12px; }
+        .match-rate { display: flex; align-items: center; gap: 8px; }
+        .match-rate-label { font-size: 12px; color: var(--text-dim); }
+        .match-rate-value { font-size: 24px; font-weight: 700; color: var(--green); }
+        .comparison-stats { display: flex; gap: 12px; font-size: 11px; }
+        .stat-matched { color: var(--green); }
+        .stat-missing { color: var(--orange); }
+        .stat-undefined { color: var(--text-muted); }
+        .comparison-section { margin-bottom: 12px; }
+        .comparison-section h4 { font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .comparison-items { display: flex; flex-wrap: wrap; gap: 6px; }
+        .comparison-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 11px; }
+        .comparison-item.missing { background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); }
+        .comparison-item.undefined { background: rgba(107,114,128,0.1); border: 1px solid rgba(107,114,128,0.3); }
+        .color-swatch-small { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border); }
+        .color-hex { font-family: var(--font-mono); color: var(--text); }
+        /* Animation Section */
+        .animation-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
+        .animation-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+        .animation-preview { width: 100%; height: 32px; background: var(--accent-light); border-radius: 4px; }
+        .animation-key { font-size: 11px; font-weight: 600; color: var(--text); font-family: var(--font-mono); }
+        .animation-val { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
         @media (max-width: 640px) {
-          .detail-content { padding: 24px 16px 60px; }
-          .detail-nav { padding: 12px 16px; }
+          .detail-content { padding: 24px 16px 80px; }
+          .detail-content-inner { width: 100%; padding: 24px 16px; }
+          .detail-nav { padding: 12px 16px; height: 56px; }
+          .detail-nav-sep, .detail-nav-name { display: none; }
           .color-grid { grid-template-columns: repeat(2, 1fr); }
           .dos-donts { grid-template-columns: 1fr; }
-          .shapes-grid { grid-template-columns: repeat(3, 1fr); }
+          .shapes-grid { grid-template-columns: repeat(2, 1fr); }
           .imagery-list { grid-template-columns: repeat(2, 1fr); }
           .components-grid { grid-template-columns: repeat(2, 1fr); }
+          /* Mobile code panel */
+          .detail-deco-col { display: none; position: fixed; inset: 0; z-index: 200; background: var(--bg); }
+          .detail-deco-col.open { display: flex; flex-direction: column; }
+          .mobile-close-btn { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; }
+          .mobile-code-toggle { position: fixed; bottom: 16px; left: 16px; right: 16px; z-index: 100; }
+          .mobile-code-btn { width: 100%; padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: var(--shadow-lg); }
         }
       `}</style>
     </div>

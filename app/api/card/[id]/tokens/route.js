@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '../../../../../src/db.js';
-import { generateTokensJson } from '../../../../../src/extractor-v2.js';
+import { getDb } from '@/src/db.js';
+import { generateVariablesCss } from '@/src/extractor-v2.js';
 
 export async function GET(request, { params }) {
   const { id } = await params;
@@ -16,35 +16,28 @@ export async function GET(request, { params }) {
     }
 
     const card = result.rows[0];
-    let tokensJson;
+    let variablesCss;
 
     // 优先使用预存的格式
     try {
       const rawData = JSON.parse(card.raw_data || '{}');
-      tokensJson = rawData.tokensJson;
+      variablesCss = rawData.variablesCss;
     } catch {}
 
     // 兜底：实时生成
-    if (!tokensJson) {
+    if (!variablesCss) {
       const colors = JSON.parse(card.colors || '[]');
       const fonts = JSON.parse(card.fonts || '[]');
       const typeScale = JSON.parse(card.type_scale || '{}');
       const gradients = JSON.parse(card.gradient || '[]');
-      tokensJson = generateTokensJson({
-        colors,
-        fonts,
-        typeScale,
-        gradients,
-        northStar: card.north_star,
-        siteName: card.name,
-      });
+      variablesCss = generateVariablesCss({ colors, fonts, typeScale, gradients });
     }
 
-    return new NextResponse(tokensJson, {
+    return new NextResponse(variablesCss, {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="${card.name || 'design-tokens'}.json"`,
+        'Content-Type': 'text/css',
+        'Content-Disposition': `attachment; filename="${card.name || 'variables'}.css"`,
         'Cache-Control': 'public, max-age=86400',
       },
     });

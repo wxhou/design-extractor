@@ -509,6 +509,45 @@ body {
   padding: 0;
   box-shadow: var(--shadow-card);
 }
+
+/* 卡片骨架屏 */
+.card-skeleton {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.skeleton-image {
+  height: 180px;
+  background: var(--bg-subtle);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+.skeleton-body {
+  padding: 16px;
+}
+.skeleton-title {
+  height: 20px;
+  width: 70%;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+.skeleton-tag {
+  height: 14px;
+  width: 40%;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  animation-delay: 0.2s;
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .card:hover {
   border-color: rgba(230,57,70,0.35);
   box-shadow: var(--shadow-hover);

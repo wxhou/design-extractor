@@ -204,6 +204,106 @@ export function getHslValues(hex) {
   };
 }
 
+// ============================================================
+// 1.5 间距、阴影、圆角提取辅助函数
+// ============================================================
+
+/**
+ * 跟踪值及其上下文
+ */
+function trackValue(valuesMap, value, context) {
+  if (!valuesMap.has(value)) {
+    valuesMap.set(value, { count: 0, contexts: [] });
+  }
+  const entry = valuesMap.get(value);
+  entry.count++;
+  if (!entry.contexts.includes(context)) {
+    entry.contexts.push(context);
+  }
+}
+
+/**
+ * 获取元素的语义上下文
+ */
+function getElementContext(el) {
+  const tag = el.tagName?.toLowerCase() || '';
+  const role = el.getAttribute('role') || '';
+  const type = el.getAttribute('type') || '';
+  const className = el.className || '';
+
+  if (tag === 'button' || role === 'button') return 'button';
+  if (tag === 'input') return type ? `input-${type}` : 'input';
+  if (tag === 'img' || tag === 'svg') return 'image';
+  if (tag === 'a') return 'link';
+  if (tag.match(/^h[1-6]$/)) return 'heading';
+  if (className.match(/card|modal|dropdown|menu|nav/i)) {
+    return className.split(' ')[0];
+  }
+  return tag;
+}
+
+/**
+ * 聚类间距值
+ */
+function clusterSpacingValues(rawValues) {
+  const entries = Object.entries(rawValues);
+  const sorted = entries.sort((a, b) => b[1].count - a[1].count);
+
+  const tokens = {};
+  const names = ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl'];
+
+  sorted.slice(0, 7).forEach(([value], i) => {
+    const name = names[i] || `${i + 1}`;
+    tokens[`spacing-${name}`] = value;
+  });
+
+  return { values: sorted, tokens };
+}
+
+/**
+ * 聚类阴影值
+ */
+function clusterShadows(rawShadows) {
+  const entries = Object.entries(rawShadows);
+  const sorted = entries.sort((a, b) => b[1].count - a[1].count);
+
+  const tokens = {};
+  const names = ['sm', 'md', 'lg', 'xl'];
+
+  sorted.slice(0, 4).forEach(([value], i) => {
+    tokens[`shadow-${names[i]}`] = value;
+  });
+
+  return { values: sorted, tokens };
+}
+
+/**
+ * 聚类圆角值
+ */
+function clusterRadiiValues(rawRadii) {
+  const entries = Object.entries(rawRadii);
+  const sorted = entries.sort((a, b) => b[1].count - a[1].count);
+
+  const tokens = {};
+  const names = ['sm', 'md', 'lg', 'full'];
+
+  // 特殊处理 full (9999px)
+  sorted.forEach(([value]) => {
+    if (value.includes('9999') || value.includes('50%')) {
+      tokens['radius-full'] = value;
+    }
+  });
+
+  // 其他值
+  sorted.slice(0, 3).forEach(([value], i) => {
+    if (!tokens[`radius-${names[i]}`]) {
+      tokens[`radius-${names[i]}`] = value;
+    }
+  });
+
+  return { values: sorted, tokens };
+}
+
 /**
  * 根据颜色推断 color_scheme (light/dark)
  */
@@ -762,6 +862,235 @@ export async function extractTypeScale(page) {
   };
 }
 
+/**
+ * 提取间距 tokens
+ */
+async function extractSpacing(page) {
+  const spacings = await page.evaluate(() => {
+    const values = new Map();
+
+    document.querySelectorAll('div, section, article, aside, header, footer, nav, main').forEach(el => {
+      const style = window.getComputedStyle(el);
+      const dirs = ['Top', 'Right', 'Bottom', 'Left'];
+
+      dirs.forEach(dir => {
+        const padding = style[`padding${dir}`];
+        if (padding && padding !== '0px' && padding !== '0') {
+          const val = parseInt(padding);
+          if (val > 0 && val < 100) {
+            trackValue(values, padding, `padding-${dir.toLowerCase()}`);
+          }
+        }
+
+        const margin = style[`margin${dir}`];
+        if (margin && margin !== '0px' && margin !== '0' && !margin.includes('-')) {
+          const val = parseInt(margin);
+          if (val > 0 && val < 100) {
+            trackValue(values, margin, `margin-${dir.toLowerCase()}`);
+          }
+        }
+      });
+
+      // gap 属性
+      if (style.gap && style.gap !== 'normal' && style.gap !== '0px') {
+        const val = parseInt(style.gap);
+        if (val > 0 && val < 100) {
+          trackValue(values, style.gap, 'gap');
+        }
+      }
+    });
+
+    return Object.fromEntries(values);
+  });
+
+  return clusterSpacingValues(spacings);
+}
+
+/**
+ * 提取阴影 tokens
+ */
+async function extractShadows(page) {
+  const shadows = await page.evaluate(() => {
+    const values = new Map();
+
+    document.querySelectorAll('div, section, article, aside, button, input, img').forEach(el => {
+      const style = window.getComputedStyle(el);
+      const shadow = style.boxShadow;
+
+      if (shadow && shadow !== 'none' && !shadow.includes('rgba(0, 0, 0, 0)') && shadow.length < 200) {
+        const ctx = getElementContext(el);
+        trackValue(values, shadow, ctx);
+      }
+    });
+
+    return Object.fromEntries(values);
+  });
+
+  return clusterShadows(shadows);
+}
+
+/**
+ * 聚类动效时间值
+ */
+function clusterAnimationDurations(rawValues) {
+  const entries = Object.entries(rawValues);
+  const sorted = entries.sort((a, b) => b[1].count - a[1].count);
+
+  const tokens = {};
+  const names = ['fast', 'base', 'slow'];
+
+  sorted.slice(0, 3).forEach(([value], i) => {
+    tokens[`duration-${names[i] || i + 1}`] = value;
+  });
+
+  return { values: sorted, tokens };
+}
+
+/**
+ * 提取动效 tokens (transition, animation, transform)
+ */
+async function extractAnimations(page) {
+  const result = await page.evaluate(() => {
+    const transitions = new Map();
+    const animations = new Map();
+    const transforms = new Map();
+    const easings = new Map();
+
+    // 选择器：可能包含动效的元素
+    const selectors = 'div, button, a, input, img, nav, header, footer, [class*="card"], [class*="modal"], [class*="dropdown"], [class*="menu"]';
+    const elements = document.querySelectorAll(selectors);
+
+    elements.forEach(el => {
+      const style = window.getComputedStyle(el);
+
+      // 提取 transition
+      const transition = style.transition;
+      if (transition && transition !== 'all 0s ease 0s' && transition !== 'none') {
+        // 解析 transition 属性
+        const parts = transition.split(/\s+/);
+        let duration = '0s', delay = '0s', timing = 'ease', property = 'all';
+
+        // 解析各个部分
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          if (p.endsWith('ms') || p.endsWith('s')) {
+            if (!duration || duration === '0s') {
+              duration = p;
+            } else if (!delay || delay === '0s') {
+              delay = p;
+            }
+          } else if (p.includes('ease') || p === 'linear' || p === 'step-start' || p === 'step-end' || p.includes('cubic-bezier') || p.includes('(')) {
+            timing = p;
+          } else if (p !== 'ease' && p !== 'linear' && p !== 'all' && !p.includes('ms') && !p.includes('s')) {
+            property = p;
+          }
+        }
+
+        if (duration !== '0s') {
+          trackValue(transitions, duration, `duration:${property}`);
+        }
+        if (timing !== 'ease') {
+          trackValue(easings, timing, 'timing-function');
+        }
+      }
+
+      // 提取 animation
+      const animation = style.animation;
+      if (animation && animation !== 'none' && animation !== 'none 0s ease 0s') {
+        const parts = animation.split(/\s+/);
+        let name = '', duration = '0s', timing = 'ease', delay = '0s', count = '1', dir = 'normal', fill = 'none';
+
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          if (p.endsWith('ms') || p.endsWith('s')) {
+            if (!duration || duration === '0s') duration = p;
+            else if (!delay || delay === '0s') delay = p;
+          } else if (['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end'].includes(p)) {
+            timing = p;
+          } else if (['infinite', '1', '2', '3', '4', '5'].includes(p)) {
+            count = p;
+          } else if (['normal', 'reverse', 'alternate', 'alternate-reverse'].includes(p)) {
+            dir = p;
+          } else if (['none', 'forwards', 'backwards', 'both'].includes(p)) {
+            fill = p;
+          } else if (!['animation'].includes(p) && !p.includes('ms') && !p.includes('s') && !p.includes('(')) {
+            name = p;
+          }
+        }
+
+        if (name) {
+          trackValue(animations, name, `duration:${duration}`);
+        }
+      }
+
+      // 提取 transform
+      const transform = style.transform;
+      if (transform && transform !== 'none' && transform !== 'matrix(none)') {
+        // 解析 transform 函数
+        if (transform.includes('scale')) {
+          const match = transform.match(/scale\(([^)]+)\)/);
+          if (match) {
+            trackValue(transforms, `scale(${match[1]})`, 'scale');
+          }
+        }
+        if (transform.includes('translate')) {
+          const match = transform.match(/translate\(([^)]+)\)/);
+          if (match) {
+            trackValue(transforms, `translate(${match[1]})`, 'translate');
+          }
+        }
+        if (transform.includes('rotate')) {
+          const match = transform.match(/rotate\(([^)]+)\)/);
+          if (match) {
+            trackValue(transforms, `rotate(${match[1]})`, 'rotate');
+          }
+        }
+      }
+
+      // 提取 will-change
+      const willChange = style.willChange;
+      if (willChange && willChange !== 'auto') {
+        trackValue(transforms, willChange, 'will-change');
+      }
+    });
+
+    return {
+      transitions: Object.fromEntries(transitions),
+      animations: Object.fromEntries(animations),
+      transforms: Object.fromEntries(transforms),
+      easings: Object.fromEntries(easings)
+    };
+  });
+
+  // 聚类 duration 值
+  result.durationTokens = clusterAnimationDurations(result.transitions);
+
+  return result;
+}
+
+/**
+ * 提取圆角 tokens
+ */
+async function extractBorderRadius(page) {
+  const radii = await page.evaluate(() => {
+    const values = new Map();
+
+    document.querySelectorAll('div, button, input, img, a, span, p').forEach(el => {
+      const style = window.getComputedStyle(el);
+      const radius = style.borderRadius;
+
+      if (radius && radius !== '0px' && radius !== '0') {
+        const ctx = getElementContext(el);
+        trackValue(values, radius, ctx);
+      }
+    });
+
+    return Object.fromEntries(values);
+  });
+
+  return clusterRadiiValues(radii);
+}
+
 // ============================================================
 // 6. MiniMax AI 增强模块
 // ============================================================
@@ -1053,9 +1382,196 @@ export function generateTokensJson(data) {
     }
   }
 
+  // Spacing
+  if (data.spacing?.tokens && Object.keys(data.spacing.tokens).length > 0) {
+    tokens.spacing = {};
+    tokens.spacing.$type = 'dimension';
+    for (const [name, value] of Object.entries(data.spacing.tokens)) {
+      const key = name.replace('spacing-', '');
+      tokens.spacing[toCssName(key)] = { $value: value };
+    }
+  }
+
+  // Shadows
+  if (data.shadows?.tokens && Object.keys(data.shadows.tokens).length > 0) {
+    tokens.shadows = {};
+    tokens.shadows.$type = 'shadow';
+    for (const [name, value] of Object.entries(data.shadows.tokens)) {
+      const key = name.replace('shadow-', '');
+      tokens.shadows[toCssName(key)] = { $value: value };
+    }
+  }
+
+  // Border Radius
+  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
+    tokens.borderRadius = {};
+    tokens.borderRadius.$type = 'dimension';
+    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
+      const key = name.replace('radius-', '');
+      tokens.borderRadius[toCssName(key)] = { $value: value };
+    }
+  }
+
+  // Animations
+  if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
+    tokens.animation = {};
+    tokens.animation.$type = 'animation';
+    for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
+      const key = name.replace('duration-', '');
+      tokens.animation[`duration${key.charAt(0).toUpperCase() + key.slice(1)}`] = { $value: value };
+    }
+  }
+
+  // Easing
+  if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
+    tokens.easing = {};
+    tokens.easing.$type = 'cubicBezier';
+    for (const [name] of Object.entries(data.animations.easings)) {
+      tokens.easing[toCssName(name)] = { $value: name };
+    }
+  }
+
   tokens.$metadata = {
     name: siteName || 'Design Tokens',
     northStar: northStar || '',
+  };
+
+  return JSON.stringify(tokens, null, 2);
+}
+
+/**
+ * Generate Style Dictionary compatible JSON format
+ * @see https://styledictionary.com/
+ */
+export function generateStyleDictionary(data) {
+  const { colors = [], fonts = [], typeScale, gradients = [], spacing, shadows, borderRadius, northStar, siteName, url } = data;
+
+  const tokens = {
+    $schema: 'https://design-tokens.github.io/community-group/format/',
+  };
+
+  const tokenSets = [];
+
+  // Colors
+  if (colors.length > 0) {
+    tokens.color = {};
+    const groups = { brand: [], accent: [], neutral: [], other: [] };
+    for (const c of colors) {
+      const key = toCssName(c.name || c.hex);
+      const token = {
+        $value: c.hex,
+        $type: 'color',
+      };
+      if (c.role) token.$description = c.role;
+      tokens.color[key] = token;
+      const group = c.group || 'other';
+      if (groups[group]) {
+        groups[group].push(key);
+      } else {
+        groups.other.push(key);
+      }
+    }
+    tokenSets.push('color');
+  }
+
+  // Gradients
+  if (gradients.length > 0) {
+    tokens.gradient = {};
+    for (let i = 0; i < gradients.length; i++) {
+      const g = gradients[i];
+      const key = toCssName(g.type || `gradient-${i + 1}`);
+      tokens.gradient[key] = {
+        $value: g.value || g.css || '',
+        $type: 'gradient',
+        $description: `${g.type || 'linear'} gradient`,
+      };
+    }
+    tokenSets.push('gradient');
+  }
+
+  // Typography
+  if (fonts.length > 0 || (typeScale && typeScale.steps && typeScale.steps.length > 0)) {
+    tokens.typography = {};
+
+    if (fonts.length > 0) {
+      tokens.typography.fontFamily = {};
+      for (const f of fonts) {
+        const key = toCssName(f.fontFamily);
+        tokens.typography.fontFamily[key] = {
+          $value: [f.fontFamily],
+          $type: 'fontFamily',
+        };
+      }
+    }
+
+    if (typeScale && typeScale.steps && typeScale.steps.length > 0) {
+      tokens.typography.fontSize = {};
+      for (const step of typeScale.steps) {
+        const key = toCssName(step.name || step.role || `step-${step.size}`);
+        tokens.typography.fontSize[key] = {
+          $value: typeof step.size === 'number' ? `${step.size}px` : step.size,
+          $type: 'dimension',
+        };
+      }
+    }
+    tokenSets.push('typography');
+  }
+
+  // Spacing
+  if (spacing?.tokens && Object.keys(spacing.tokens).length > 0) {
+    tokens.spacing = {};
+    for (const [name, value] of Object.entries(spacing.tokens)) {
+      const key = name.replace('spacing-', '');
+      tokens.spacing[toCssName(key)] = { $value: value, $type: 'dimension' };
+    }
+    tokenSets.push('spacing');
+  }
+
+  // Shadows
+  if (shadows?.tokens && Object.keys(shadows.tokens).length > 0) {
+    tokens.shadow = {};
+    for (const [name, value] of Object.entries(shadows.tokens)) {
+      const key = name.replace('shadow-', '');
+      tokens.shadow[toCssName(key)] = { $value: value, $type: 'shadow' };
+    }
+    tokenSets.push('shadow');
+  }
+
+  // Border Radius
+  if (borderRadius?.tokens && Object.keys(borderRadius.tokens).length > 0) {
+    tokens.borderRadius = {};
+    for (const [name, value] of Object.entries(borderRadius.tokens)) {
+      const key = name.replace('radius-', '');
+      tokens.borderRadius[toCssName(key)] = { $value: value, $type: 'dimension' };
+    }
+    tokenSets.push('borderRadius');
+  }
+
+  // Animations
+  if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
+    tokens.transition = {};
+    for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
+      const key = name.replace('duration-', '');
+      tokens.transition[`duration${key.charAt(0).toUpperCase() + key.slice(1)}`] = { $value: value, $type: 'duration' };
+    }
+    tokenSets.push('transition');
+  }
+
+  // Easing
+  if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
+    tokens.easing = tokens.easing || {};
+    for (const [name] of Object.entries(data.animations.easings)) {
+      tokens.easing[toCssName(name)] = { $value: name, $type: 'cubicBezier' };
+    }
+    if (!tokenSets.includes('easing')) tokenSets.push('easing');
+  }
+
+  // Style Dictionary specific metadata
+  tokens.$metadata = {
+    name: siteName || 'Design Tokens',
+    source: url || '',
+    format: 'Style Dictionary',
+    tokenSetOrder: tokenSets,
   };
 
   return JSON.stringify(tokens, null, 2);
@@ -1129,6 +1645,51 @@ export function generateVariablesCss(data) {
     lines.push('');
   }
 
+  // Spacing
+  if (data.spacing?.tokens && Object.keys(data.spacing.tokens).length > 0) {
+    lines.push('  /* Spacing */');
+    for (const [name, value] of Object.entries(data.spacing.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Shadows
+  if (data.shadows?.tokens && Object.keys(data.shadows.tokens).length > 0) {
+    lines.push('  /* Shadows */');
+    for (const [name, value] of Object.entries(data.shadows.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Border Radius
+  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
+    lines.push('  /* Border Radius */');
+    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Animations
+  if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
+    lines.push('  /* Animation Duration */');
+    for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Easing
+  if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
+    lines.push('  /* Animation Easing */');
+    for (const [name] of Object.entries(data.animations.easings)) {
+      lines.push(`  --easing-${toCssName(name)}: ${name};`);
+    }
+    lines.push('');
+  }
+
   // Remove trailing blank line before closing
   while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
   lines.push('}');
@@ -1178,6 +1739,51 @@ export function generateThemeCss(data) {
       lines.push(`  --font-size-${toCssName(step.name || step.role || `step-${step.size}`)}: ${step.size}px;`);
     }
     if (typeScale.base) lines.push(`  --font-size-base: ${typeScale.base}px;`);
+    lines.push('');
+  }
+
+  // Spacing
+  if (data.spacing?.tokens && Object.keys(data.spacing.tokens).length > 0) {
+    lines.push('  /* Spacing */');
+    for (const [name, value] of Object.entries(data.spacing.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Shadows
+  if (data.shadows?.tokens && Object.keys(data.shadows.tokens).length > 0) {
+    lines.push('  /* Shadows */');
+    for (const [name, value] of Object.entries(data.shadows.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Border Radius
+  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
+    lines.push('  /* Border Radius */');
+    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Animations
+  if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
+    lines.push('  /* Animation Duration */');
+    for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
+      lines.push(`  --${toCssName(name)}: ${value};`);
+    }
+    lines.push('');
+  }
+
+  // Easing
+  if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
+    lines.push('  /* Animation Easing */');
+    for (const [name] of Object.entries(data.animations.easings)) {
+      lines.push(`  --easing-${toCssName(name)}: ${name};`);
+    }
     lines.push('');
   }
 
@@ -1238,6 +1844,45 @@ north_star: "${northStar || ''}"
     }
   }
 
+  // Spacing
+  if (data.spacing?.tokens && Object.keys(data.spacing.tokens).length > 0) {
+    md += `\nspacing:\n`;
+    for (const [name, value] of Object.entries(data.spacing.tokens)) {
+      md += `  ${name}: "${value}"\n`;
+    }
+  }
+
+  // Shadows
+  if (data.shadows?.tokens && Object.keys(data.shadows.tokens).length > 0) {
+    md += `\nshadows:\n`;
+    for (const [name, value] of Object.entries(data.shadows.tokens)) {
+      md += `  ${name}: "${value}"\n`;
+    }
+  }
+
+  // Border Radius
+  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
+    md += `\nborder_radius:\n`;
+    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
+      md += `  ${name}: "${value}"\n`;
+    }
+  }
+
+  // Animations
+  if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
+    md += `\nanimation_duration:\n`;
+    for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
+      md += `  ${name}: "${value}"\n`;
+    }
+  }
+
+  if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
+    md += `\nanimation_easing:\n`;
+    for (const [name] of Object.entries(data.animations.easings)) {
+      md += `  ${toCssName(name)}: "${name}"\n`;
+    }
+  }
+
   // Prose
   md += `\n---\n\n`;
   md += `## ${siteName} Design System\n\n`;
@@ -1265,6 +1910,58 @@ north_star: "${northStar || ''}"
   md += `### Typography\n\n`;
   md += `Primary font: **${fonts[0]?.fontFamily || 'System'}**\n`;
   md += `Weights: ${fonts[0]?.weights.join(', ') || '400'}\n`;
+
+  // Spacing Section
+  if (data.spacing?.tokens && Object.keys(data.spacing.tokens).length > 0) {
+    md += `\n### Spacing\n\n`;
+    for (const [name, value] of Object.entries(data.spacing.tokens)) {
+      md += `- **${name}** ${value}\n`;
+    }
+    md += `\n`;
+  }
+
+  // Shadows Section
+  if (data.shadows?.tokens && Object.keys(data.shadows.tokens).length > 0) {
+    md += `### Shadows\n\n`;
+    for (const [name, value] of Object.entries(data.shadows.tokens)) {
+      md += `- **${name}** ${value}\n`;
+    }
+    md += `\n`;
+  }
+
+  // Border Radius Section
+  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
+    md += `### Border Radius\n\n`;
+    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
+      md += `- **${name}** ${value}\n`;
+    }
+    md += `\n`;
+  }
+
+  // Animation Duration Section
+  if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
+    md += `### Animation Timing\n\n`;
+    md += `| Token | Value | Description |\n|-------|-------|-------------|\n`;
+    const nameDescMap = {
+      'duration-fast': 'Quick feedback',
+      'duration-base': 'Default transition',
+      'duration-slow': 'Page transitions'
+    };
+    for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
+      const desc = nameDescMap[name] || '';
+      md += `| --${name} | ${value} | ${desc} |\n`;
+    }
+    md += `\n`;
+  }
+
+  // Animation Easing Section
+  if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
+    md += `### Animation Easing\n\n`;
+    for (const [easing] of Object.entries(data.animations.easings)) {
+      md += `- **${easing}**\n`;
+    }
+    md += `\n`;
+  }
 
   return md;
 }
@@ -1354,17 +2051,37 @@ export async function extractDesignTokens(url, options = {}) {
     console.error(`[extractor-v2] Extracting type scale...`);
     const typeScale = await extractTypeScale(page);
 
-    // 7. 组装基础数据
+    // 7. 提取间距
+    console.error(`[extractor-v2] Extracting spacing...`);
+    const spacing = await extractSpacing(page);
+
+    // 8. 提取阴影
+    console.error(`[extractor-v2] Extracting shadows...`);
+    const shadows = await extractShadows(page);
+
+    // 9. 提取圆角
+    console.error(`[extractor-v2] Extracting border radius...`);
+    const borderRadius = await extractBorderRadius(page);
+
+    // 10. 提取动效
+    console.error(`[extractor-v2] Extracting animations...`);
+    const animations = await extractAnimations(page);
+
+    // 11. 组装基础数据
     const baseData = {
       url: targetUrl,
       siteName,
       colors: clusteredColors,
       fonts,
       gradients: styleData.gradients,
-      typeScale
+      typeScale,
+      spacing,
+      shadows,
+      borderRadius,
+      animations
     };
 
-    // 8. AI 增强（可选）
+    // 12. AI 增强（可选）
     let enrichedData = baseData;
     if (options.useAI !== false) {
       console.error(`[extractor-v2] Enriching with AI...`);
@@ -1379,14 +2096,14 @@ export async function extractDesignTokens(url, options = {}) {
       }));
     }
 
-    // 9. 生成 Markdown
+    // 11. 生成 Markdown
     const designMd = generateDesignMd(enrichedData);
 
-    // 10. 推断 color_scheme 和 category
+    // 12. 推断 color_scheme 和 category
     const colorScheme = inferColorScheme(enrichedData.colors);
     const category = inferCategory(enrichedData.colors, colorScheme);
 
-    // 11. 截图（失败不影响主流程）
+    // 13. 截图（失败不影响主流程）
     let screenshotBuffer = null;
     if (options.captureScreenshot) {
       console.error(`[extractor-v2] Capturing screenshot...`);
@@ -1406,7 +2123,7 @@ export async function extractDesignTokens(url, options = {}) {
       }
     }
 
-    // 12. 组装最终响应
+    // 14. 组装最终响应
     const duration = Date.now() - startTime;
     console.error(`[extractor-v2] Done in ${duration}ms`);
 
@@ -1421,6 +2138,10 @@ export async function extractDesignTokens(url, options = {}) {
       typography: { scale: enrichedData.typeScale },
       gradient: enrichedData.gradients,
       typeScale: enrichedData.typeScale,
+      spacing: enrichedData.spacing,
+      shadows: enrichedData.shadows,
+      borderRadius: enrichedData.borderRadius,
+      animations: enrichedData.animations,
       northStar: enrichedData.northStar || null,
       colorScheme,
       category,

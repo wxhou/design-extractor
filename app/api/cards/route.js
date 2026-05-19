@@ -9,15 +9,14 @@ export async function GET(request) {
   const offset = (page - 1) * limit;
 
   try {
-    const db = getDb();
+    const db = await getDb();
 
     // 构建 WHERE 条件
     const conditions = [];
     const args = [];
     if (category !== 'all') {
-      const cat = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
       conditions.push('category = ?');
-      args.push(cat);
+      args.push(category);
     }
     if (search) {
       conditions.push('(name LIKE ? OR url LIKE ?)');
@@ -26,10 +25,7 @@ export async function GET(request) {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // 总数
-    const countResult = await db.execute({
-      sql: `SELECT COUNT(*) as cnt FROM cards ${whereClause}`,
-      args,
-    });
+    const countResult = await db.execute(`SELECT COUNT(*) as cnt FROM cards ${whereClause}`, args);
     const total = Number(countResult.rows[0].cnt);
 
     // 分类计数
@@ -52,11 +48,10 @@ export async function GET(request) {
     }));
 
     // 数据
-    const dataArgs = [...args, limit, offset];
-    const dataResult = await db.execute({
-      sql: `SELECT id, name, url, preview, video_url, screenshot, north_star, color_scheme, category FROM cards ${whereClause} ORDER BY name LIMIT ? OFFSET ?`,
-      args: dataArgs,
-    });
+    const dataResult = await db.execute(
+      `SELECT id, name, url, preview, video_url, screenshot, north_star, color_scheme, category FROM cards ${whereClause} ORDER BY name LIMIT ? OFFSET ?`,
+      [...args, limit, offset]
+    );
 
     const cards = dataResult.rows.map(row => ({
       id: row.id,

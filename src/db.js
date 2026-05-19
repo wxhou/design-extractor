@@ -16,6 +16,12 @@ const DB_PATH = isStandalone
   ? '/app/refero.db'
   : path.join(_thisDir, '..', 'refero.db');
 
+const MIGRATIONS = [
+  'ALTER TABLE cards ADD COLUMN spacing TEXT',
+  'ALTER TABLE cards ADD COLUMN shadows TEXT',
+  'ALTER TABLE cards ADD COLUMN border_radius TEXT',
+];
+
 // wasm 文件位置：运行时动态检测
 const locateFile = file => {
   if (process.env.NODE_ENV === 'production') {
@@ -67,6 +73,9 @@ async function getSqlDb() {
           typography   TEXT,
           type_scale   TEXT,
           gradient     TEXT,
+          spacing      TEXT,
+          shadows      TEXT,
+          border_radius TEXT,
           raw_data     TEXT,
           created_at   TEXT
         )

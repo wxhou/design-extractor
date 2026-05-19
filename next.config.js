@@ -1,10 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  // 确保静态资源在 standalone 构建中被复制
-  experimental: {
-    // Force copy static files
-  },
+  serverExternalPackages: ['sql.js'],
+  // 配置路径别名指向 src 目录
 };
 
 export default nextConfig;

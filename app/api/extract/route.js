@@ -1,20 +1,33 @@
-import { extractDesignTokens, isValidDomain, normalizeUrl, generateTokensJson, generateVariablesCss, generateThemeCss } from '../../../src/extractor-v2.js';
-import { getDb } from '../../../src/db.js';
+import { extractDesignTokens, isValidDomain, normalizeUrl, generateTokensJson, generateVariablesCss, generateThemeCss } from '@/src/extractor-v2.js';
+import { getDb } from '@/src/db.js';
+import { uploadToSMMS } from '@/src/smms.js';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
-// screenshots 目录：直接使用 public/screenshots
+// screenshots 目录：本地备用
 const SCREENSHOTS_DIR = path.join(process.cwd(), 'public', 'screenshots');
 
-function saveScreenshot(screenshotBuffer, cardId) {
+async function saveScreenshot(screenshotBuffer, cardId) {
   if (!screenshotBuffer) return null;
+
+  // 保存为 base64 存入数据库
+  const result = await uploadToSMMS(screenshotBuffer, `${cardId}.png`);
+
+  if (result.success) {
+    console.log('[extract] Screenshot saved as base64:', result.url.substring(0, 50) + '...');
+    return result.url;
+  }
+
+  // 失败回退到本地存储
+  console.log('[extract] Save failed, falling back to local storage:', result.error);
+
   if (!fs.existsSync(SCREENSHOTS_DIR)) {
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   }
   const screenshotPath = path.join(SCREENSHOTS_DIR, `${cardId}.png`);
   fs.writeFileSync(screenshotPath, screenshotBuffer);
-  // 使用 API 端点来服务截图，这样无论 Docker 容器如何配置都能正常工作
+
   return `/api/screenshots/${cardId}.png`;
 }
 
@@ -123,7 +136,7 @@ export async function POST(request) {
 
     // 保存截图（截图失败不影响主流程）
     if (result.screenshot) {
-      screenshotPath = saveScreenshot(result.screenshot, cardId);
+      screenshotPath = await saveScreenshot(result.screenshot, cardId);
       console.log('[extract] Screenshot saved:', screenshotPath);
     } else {
       console.log('[extract] No screenshot captured');
@@ -144,8 +157,8 @@ export async function POST(request) {
     extractionJobs.set(jobId, { status: 'saving_to_db', progress: 90 });
     const db = await getDb();
     await db.execute({
-      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, raw_data, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, spacing, shadows, border_radius, raw_data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               url = excluded.url,
@@ -159,6 +172,9 @@ export async function POST(request) {
               typography = excluded.typography,
               type_scale = excluded.type_scale,
               gradient = excluded.gradient,
+              spacing = excluded.spacing,
+              shadows = excluded.shadows,
+              border_radius = excluded.border_radius,
               raw_data = excluded.raw_data,
               created_at = excluded.created_at`,
       args: [
@@ -175,7 +191,10 @@ export async function POST(request) {
         JSON.stringify(result.typography || {}),
         JSON.stringify(result.typeScale || {}),
         JSON.stringify(result.gradient || []),
-        JSON.stringify({ tokensJson, variablesCss, themeCss }),
+        JSON.stringify(result.spacing || {}),
+        JSON.stringify(result.shadows || {}),
+        JSON.stringify(result.borderRadius || {}),
+        JSON.stringify({ tokensJson, variablesCss, themeCss, animations: result.animations }),
         now,
       ],
     });
@@ -194,6 +213,10 @@ export async function POST(request) {
       typography: result.typography,
       gradient: result.gradient,
       typeScale: result.typeScale,
+      spacing: result.spacing,
+      shadows: result.shadows,
+      borderRadius: result.borderRadius,
+      animations: result.animations,
       northStar: result.northStar,
       colorScheme: result.colorScheme,
       category: result.category,

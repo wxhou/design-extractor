@@ -553,13 +553,28 @@ export default function Home() {
               <div className="cards-header-line" />
             </div>
             <div className="cards-grid">
-              {cards.map(card => (
-                <VideoCard
-                  key={card.id}
-                  card={card}
-                  onCardClick={handleCardClick}
-                />
-              ))}
+              {loading ? (
+                // 骨架屏
+                <>
+                  {[1,2,3,4,5,6].map(i => (
+                    <div key={i} className="card-skeleton">
+                      <div className="skeleton-image" />
+                      <div className="skeleton-body">
+                        <div className="skeleton-title" />
+                        <div className="skeleton-tag" />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                cards.map(card => (
+                  <VideoCard
+                    key={card.id}
+                    card={card}
+                    onCardClick={handleCardClick}
+                  />
+                ))
+              )}
             </div>
 
             {/* 加载更多 sentinel */}

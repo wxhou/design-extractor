@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '../../../../src/db.js';
+import { getDb } from '@/src/db.js';
 
 export async function GET(request, { params }) {
   const { id } = await params;
   try {
-    const db = getDb();
+    const db = await getDb();
     const result = await db.execute({
       sql: 'SELECT * FROM cards WHERE id = ?',
       args: [id],
