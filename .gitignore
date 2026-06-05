@@ -40,6 +40,7 @@ Thumbs.db
 *.swo
 
 .claude/
+CLAUDE.md
 openspec/
 
 # Testing
