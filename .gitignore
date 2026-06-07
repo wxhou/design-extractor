@@ -43,6 +43,11 @@ Thumbs.db
 CLAUDE.md
 openspec/
 
+# Agent / Codex tooling (local-only)
+.agents/
+.codex/
+AGENTS.md
+
 # Testing
 coverage/
 .vercel
