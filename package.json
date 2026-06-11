@@ -29,6 +29,7 @@
     "yaml": "^2.8.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "agentation": "^3.0.2"
   }
 }

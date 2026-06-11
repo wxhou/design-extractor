@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/src/db.js';
+import { safeParse } from '@/src/utils.js';
 import { compareTokens, generateComparisonMd } from '@/src/comparison.js';
 import { extractFileKey, extractStylesFromFile } from '@/src/figma.js';
 
@@ -28,9 +29,9 @@ export async function GET(request) {
 
       const card = result.rows[0];
       websiteTokens = {
-        colors: JSON.parse(card.colors || '[]'),
-        fonts: JSON.parse(card.fonts || '[]'),
-        shadows: card.border_radius ? JSON.parse(card.border_radius || '[]') : [],
+        colors: safeParse(card.colors, []),
+        fonts: safeParse(card.fonts, []),
+        shadows: safeParse(card.border_radius, []),
       };
     }
 

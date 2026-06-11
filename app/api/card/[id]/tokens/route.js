@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/src/db.js';
 import { generateVariablesCss } from '@/src/extractor-v2.js';
+import { isValidUUID, safeParse } from '@/src/utils.js';
 
 export async function GET(request, { params }) {
   const { id } = await params;
+  if (!isValidUUID(id)) {
+    return new NextResponse('Invalid card ID', { status: 400 });
+  }
   try {
     const db = await getDb();
     const result = await db.execute({
@@ -20,16 +24,16 @@ export async function GET(request, { params }) {
 
     // 优先使用预存的格式
     try {
-      const rawData = JSON.parse(card.raw_data || '{}');
+      const rawData = safeParse(card.raw_data, {});
       variablesCss = rawData.variablesCss;
     } catch {}
 
     // 兜底：实时生成
     if (!variablesCss) {
-      const colors = JSON.parse(card.colors || '[]');
-      const fonts = JSON.parse(card.fonts || '[]');
-      const typeScale = JSON.parse(card.type_scale || '{}');
-      const gradients = JSON.parse(card.gradient || '[]');
+      const colors = safeParse(card.colors, []);
+      const fonts = safeParse(card.fonts, []);
+      const typeScale = safeParse(card.type_scale, {});
+      const gradients = safeParse(card.gradient, []);
       variablesCss = generateVariablesCss({ colors, fonts, typeScale, gradients });
     }
 

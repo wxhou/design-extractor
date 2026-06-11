@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(request) {
   // 获取路由参数
   const url = new URL(request.url);
@@ -10,6 +12,11 @@ export async function GET(request) {
 
   if (!id) {
     return NextResponse.json({ error: 'Missing id parameter' }, { status: 400 });
+  }
+
+  // Validate UUID format to prevent path traversal
+  if (!UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
   }
 
   const cwd = process.cwd();

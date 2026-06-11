@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/src/db.js';
+import { isValidUUID } from '@/src/utils.js';
 
 export async function GET(request, { params }) {
   const { id } = await params;
+  if (!isValidUUID(id)) {
+    return NextResponse.json({ error: 'Invalid card ID' }, { status: 400 });
+  }
   try {
     const db = await getDb();
     const result = await db.execute({

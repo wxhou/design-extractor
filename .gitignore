@@ -46,3 +46,6 @@ openspec/
 # Testing
 coverage/
 .vercel
+test-results/
+playwright-report/
+blob-report/

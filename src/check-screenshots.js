@@ -64,11 +64,9 @@ async function checkScreenshots() {
       broken++;
 
       if (!dryRun) {
-        console.write('   正在重新上传... ');
-
-        // 这里需要重新提取截图，但目前没有存储原始截图数据
-        // 暂时标记为需要重新提取
-        console.log('⚠️  需要重新提取 (暂无原始截图数据)');
+        // 由于 smms.js 使用 base64 存储，旧的 SM.MS URL 截图不支持重新上传
+        // 需要重新提取该网站才能生成新的 base64 截图
+        console.log('   ⚠️ 旧 URL 截图不支持自动修复，请重新提取该网站');
       }
     }
   }

@@ -1977,45 +1977,46 @@ export async function extractDesignTokens(url, options = {}) {
   const startTime = Date.now();
 
   let browser;
-  const browserlessToken = process.env.BROWSERLESS_TOKEN;
-  if (browserlessToken) {
-    // Fetch fresh WebSocket URL from Browserless CDP endpoint
-    console.error(`[extractor-v2] Getting Browserless WebSocket URL...`);
-    const versionResp = await fetch(`https://chrome.browserless.io/json/version?token=${browserlessToken}`);
-    const versionData = await versionResp.json();
-    const wsEndpoint = versionData.webSocketDebuggerUrl + (versionData.webSocketDebuggerUrl.includes('?') ? '&' : '?') + `token=${browserlessToken}`;
-    console.error(`[extractor-v2] Connecting to Browserless: ${wsEndpoint.replace(/\/\/.*@/, '//***@')}`);
-    browser = await chromium.connect(wsEndpoint);
-  } else {
-    const chromiumPath = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
-    browser = await chromium.launch({
-      headless: true,
-      executablePath: chromiumPath,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
-    });
-  }
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
-  });
-  const page = await context.newPage();
-
+  let context;
   try {
-    // 1. 规范化 URL（补全协议前缀）
+    // 1. Start browser
+    const browserlessToken = process.env.BROWSERLESS_TOKEN;
+    if (browserlessToken) {
+      console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);
+      const versionResp = await fetch(`https://chrome.browserless.io/json/version?token=${browserlessToken}`);
+      const versionData = await versionResp.json();
+      const wsEndpoint = versionData.webSocketDebuggerUrl + (versionData.webSocketDebuggerUrl.includes('?') ? '&' : '?') + `token=${browserlessToken}`;
+      console.log(`[extractor-v2] Connecting to Browserless: ${wsEndpoint.replace(/\/\/[^@]+@/, '//***@')}`);
+      browser = await chromium.connect(wsEndpoint);
+    } else {
+      const chromiumPath = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+      browser = await chromium.launch({
+        headless: true,
+        executablePath: chromiumPath,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ],
+      });
+    }
+    context = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+    });
+    const page = await context.newPage();
+
+    // 2. 规范化 URL（补全协议前缀）
     let targetUrl = url;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       // 先尝试 HTTPS，失败则降级到 HTTP
       try {
-        console.error(`[extractor-v2] Trying HTTPS first: ${url}`);
+        console.log(`[extractor-v2] Trying HTTPS first: ${url}`);
         await page.goto('https://' + url, { waitUntil: 'domcontentloaded', timeout: 5000 });
         targetUrl = 'https://' + url;
       } catch (httpsErr) {
-        console.error(`[extractor-v2] HTTPS failed, trying HTTP: ${url}`);
+        console.log(`[extractor-v2] HTTPS failed, trying HTTP: ${url}`);
         await page.goto('http://' + url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         targetUrl = 'http://' + url;
       }
@@ -2036,35 +2037,35 @@ export async function extractDesignTokens(url, options = {}) {
     }
 
     // 3. 提取样式数据
-    console.error(`[extractor-v2] Extracting styles...`);
+    console.log(`[extractor-v2] Extracting styles...`);
     const styleData = await extractStylesFromPage(page);
 
     // 4. 聚类颜色
-    console.error(`[extractor-v2] Clustering colors...`);
+    console.log(`[extractor-v2] Clustering colors...`);
     const clusteredColors = clusterColors(styleData.colors);
 
     // 5. 提取字体
-    console.error(`[extractor-v2] Extracting fonts...`);
+    console.log(`[extractor-v2] Extracting fonts...`);
     const fonts = await extractFonts(page);
 
     // 6. 提取字号层级
-    console.error(`[extractor-v2] Extracting type scale...`);
+    console.log(`[extractor-v2] Extracting type scale...`);
     const typeScale = await extractTypeScale(page);
 
     // 7. 提取间距
-    console.error(`[extractor-v2] Extracting spacing...`);
+    console.log(`[extractor-v2] Extracting spacing...`);
     const spacing = await extractSpacing(page);
 
     // 8. 提取阴影
-    console.error(`[extractor-v2] Extracting shadows...`);
+    console.log(`[extractor-v2] Extracting shadows...`);
     const shadows = await extractShadows(page);
 
     // 9. 提取圆角
-    console.error(`[extractor-v2] Extracting border radius...`);
+    console.log(`[extractor-v2] Extracting border radius...`);
     const borderRadius = await extractBorderRadius(page);
 
     // 10. 提取动效
-    console.error(`[extractor-v2] Extracting animations...`);
+    console.log(`[extractor-v2] Extracting animations...`);
     const animations = await extractAnimations(page);
 
     // 11. 组装基础数据
@@ -2084,7 +2085,7 @@ export async function extractDesignTokens(url, options = {}) {
     // 12. AI 增强（可选）
     let enrichedData = baseData;
     if (options.useAI !== false) {
-      console.error(`[extractor-v2] Enriching with AI...`);
+      console.log(`[extractor-v2] Enriching with AI...`);
       enrichedData = await enrichWithAI(baseData);
     } else {
       // 使用规则推断
@@ -2106,16 +2107,16 @@ export async function extractDesignTokens(url, options = {}) {
     // 13. 截图（失败不影响主流程）
     let screenshotBuffer = null;
     if (options.captureScreenshot) {
-      console.error(`[extractor-v2] Capturing screenshot...`);
+      console.log(`[extractor-v2] Capturing screenshot...`);
       try {
         screenshotBuffer = await page.screenshot({ type: 'png', fullPage: true });
-        console.error(`[extractor-v2] Screenshot captured: ${screenshotBuffer?.length || 0} bytes`);
+        console.log(`[extractor-v2] Screenshot captured: ${screenshotBuffer?.length || 0} bytes`);
       } catch (screenshotErr) {
         console.error(`[extractor-v2] Screenshot failed (non-fatal): ${screenshotErr.message}`);
         // 降级：尝试截取可见区域
         try {
           screenshotBuffer = await page.screenshot({ type: 'png', fullPage: false });
-          console.error(`[extractor-v2] Fallback screenshot captured: ${screenshotBuffer?.length || 0} bytes`);
+          console.log(`[extractor-v2] Fallback screenshot captured: ${screenshotBuffer?.length || 0} bytes`);
         } catch (fallbackErr) {
           console.error(`[extractor-v2] Fallback screenshot also failed: ${fallbackErr.message}`);
           screenshotBuffer = null;
@@ -2125,9 +2126,7 @@ export async function extractDesignTokens(url, options = {}) {
 
     // 14. 组装最终响应
     const duration = Date.now() - startTime;
-    console.error(`[extractor-v2] Done in ${duration}ms`);
-
-    await browser.close();
+    console.log(`[extractor-v2] Done in ${duration}ms`);
 
     return {
       success: true,
@@ -2150,11 +2149,15 @@ export async function extractDesignTokens(url, options = {}) {
     };
 
   } catch (error) {
-    await browser.close();
+    await context?.close();
+    await browser?.close();
     return {
       success: false,
       error: error.message
     };
+  } finally {
+    await context?.close();
+    await browser?.close();
   }
 }
 

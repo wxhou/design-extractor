@@ -37,6 +37,7 @@ const _sqlPromise = initSqlJs({ locateFile });
 
 let tursoClient = null;
 let _dbInstance = null;
+let _dbPromise = null;
 
 function getTursoDb() {
   if (!tursoClient) {
@@ -50,7 +51,10 @@ function getTursoDb() {
 }
 
 async function getSqlDb() {
-  if (!_dbInstance) {
+  if (_dbInstance) return _dbInstance;
+  if (_dbPromise) return _dbPromise;
+
+  _dbPromise = (async () => {
     const SQL = await _sqlPromise;
     if (fs.existsSync(DB_PATH)) {
       const buf = fs.readFileSync(DB_PATH);
@@ -90,8 +94,21 @@ async function getSqlDb() {
       `);
       _dbInstance = db;
     }
+    return _dbInstance;
+  })();
+
+  try {
+    const db = await Promise.race([
+      _dbPromise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Database initialization timed out')), 15000)
+      ),
+    ]);
+    return db;
+  } catch (err) {
+    _dbPromise = null;
+    throw err;
   }
-  return _dbInstance;
 }
 
 // 统一的 db 接口，屏蔽 Turso/sql.js 差异

@@ -57,9 +57,11 @@ function getFriendlyError(errorMessage) {
 
 async function findExistingCard(normalizedHost) {
   const db = await getDb();
+  // Escape LIKE wildcards in the host to prevent unintended pattern matching
+  const safeHost = normalizedHost.replace(/%/g, '\\%').replace(/_/g, '\\_');
   const result = await db.execute({
-    sql: 'SELECT id, url, name FROM cards WHERE url LIKE ?',
-    args: [`%${normalizedHost}%`],
+    sql: 'SELECT id, url, name FROM cards WHERE url LIKE ? ESCAPE \'\\\'',
+    args: [`%${safeHost}%`],
   });
   for (const row of result.rows) {
     const normalized = normalizeUrl(row.url);
@@ -72,7 +74,51 @@ async function findExistingCard(normalizedHost) {
 
 const extractionJobs = new Map();
 
+// Rate limiting: 5 requests per minute per IP
+const RATE_LIMIT = 5;
+const RATE_WINDOW = 60; // seconds
+const rateLimits = new Map();
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = rateLimits.get(ip) || { tokens: RATE_LIMIT, lastRefill: now };
+  const elapsed = (now - entry.lastRefill) / 1000;
+  entry.tokens = Math.min(RATE_LIMIT, entry.tokens + elapsed * (RATE_LIMIT / RATE_WINDOW));
+  entry.lastRefill = now;
+  if (entry.tokens < 1) return false;
+  entry.tokens -= 1;
+  rateLimits.set(ip, entry);
+  return true;
+}
+
+// Periodic cleanup of stale rate limit entries (every 5 minutes)
+setInterval(() => {
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  for (const [ip, entry] of rateLimits) {
+    if (entry.lastRefill < cutoff) rateLimits.delete(ip);
+  }
+}, 5 * 60 * 1000);
+
+// Periodic eviction of stuck extraction jobs (stuck > 10 minutes)
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [jid, job] of extractionJobs) {
+    if (job.startedAt && job.startedAt < cutoff && job.status !== 'done' && job.status !== 'error') {
+      extractionJobs.delete(jid);
+    }
+  }
+}, 5 * 60 * 1000);
+
 export async function POST(request) {
+  // Rate limit check
+  const ip = request.headers.get('x-forwarded-for') || 'unknown';
+  if (!checkRateLimit(ip)) {
+    return Response.json(
+      { success: false, error: '请求过于频繁，请稍后再试' },
+      { status: 429, headers: { 'Retry-After': '60' } }
+    );
+  }
+
   const { url } = await request.json();
 
   if (!url) {
@@ -92,7 +138,17 @@ export async function POST(request) {
   let screenshotPath = null;
 
   const jobId = randomUUID();
-  extractionJobs.set(jobId, { status: 'starting', progress: 0 });
+
+  // Check max capacity (100 concurrent jobs)
+  const MAX_JOBS = 100;
+  if (extractionJobs.size >= MAX_JOBS) {
+    return Response.json(
+      { success: false, error: '服务器繁忙，请稍后再试' },
+      { status: 503, headers: { 'Retry-After': '30' } }
+    );
+  }
+
+  extractionJobs.set(jobId, { status: 'starting', progress: 0, startedAt: Date.now() });
 
   try {
     // 检查重复
@@ -228,8 +284,8 @@ export async function POST(request) {
   } catch (error) {
     console.error('[extract] Error:', error.message, error.stack);
     extractionJobs.set(jobId, { status: 'error', progress: 100, error: error.message });
-    // 清理截图
-    if (screenshotPath) {
+    // 清理本地截图文件（跳过 base64 URL）
+    if (screenshotPath && !screenshotPath.startsWith('data:')) {
       try {
         fs.unlinkSync(path.join(process.cwd(), 'public', screenshotPath));
       } catch {}
