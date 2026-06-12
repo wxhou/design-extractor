@@ -1,112 +1,127 @@
-# App Knowledge — <project-name>
+# App Knowledge — design-extractor
 
-Generated: <timestamp>
-Last updated: <timestamp>
+Generated: 2026-06-12
+Last updated: 2026-06-12
 
-Cross-change E2E knowledge. Updated by Step 4 exploration, read by Step 5/6.
+Cross-change E2E knowledge for the Design Extractor project.
 
 ## Routes
 
-Discovered routes from sitemap.xml or link extraction. Used by "all" mode to generate Page Objects.
-
 | Route | Auth | Page Object | Notes |
 |-------|------|-------------|-------|
-| `/` | guest | `HomePage.ts` | Landing page |
-| `/login` | guest | `LoginPage.ts` | Auth entry |
-| `/dashboard` | required | `DashboardPage.ts` | Protected |
-| | | | |
+| `/` | guest | `HomePage.ts` | URL extraction, search, category filters, card grid (404 cards) |
+| `/style/[id]` | guest | `StyleDetailPage.ts` | Colors, typography, spacing, components, export tabs, Figma comparison |
+| `/api/cards` | none | — | Cards list API (JSON) |
+| `/api/card/[id]` | none | — | Card detail API (JSON) |
+| `/api/extract` | none | — | POST: Extract design tokens |
+| `/api/comparison` | none | — | POST: Compare designs |
+| `/api/screenshots/[id]` | none | — | Screenshot serving |
+| `/api/figma/extract` | none | — | POST: Figma extraction |
 
 ## Credential Format
 
-| Field | Format | Source |
-|-------|--------|--------|
-| username | `<pattern>` | e.g. `email@example.com` or `test_user_001` |
-| password | `<pattern>` | |
-| login endpoint | `<path>` | e.g. `/api/auth/login` |
+No auth required. All routes are public.
 
 ## Common Selector Patterns
 
-Priority: `[data-testid]` > `getByRole` > `getByLabel` > `getByText` > CSS
+Priority: `getByRole` > `getByPlaceholder` > `locator('[class*="..."]')`
 
-### Forms
-
-| Element | Selector | Notes |
-|---------|----------|-------|
-| submit btn | `[data-testid="..."]` or `getByRole('button', { name: '...' })` | |
-| text input | `getByLabel('...')` or `[data-testid="..."]` | |
-| password input | `getByLabel('...')` or `[name="..."]` | |
-
-### Navigation
+### Home Page (`/`)
 
 | Element | Selector | Notes |
 |---------|----------|-------|
-| nav link | `a:text("...")` or `nav >> text=...` | |
-| logout btn | `[data-testid="logout-btn"]` | |
+| URL input | `getByPlaceholder('https://stripe.com')` | Not "Enter website URL" |
+| Search input | `getByPlaceholder('Search sites...')` | Not "Search websites..." |
+| Extract button | `getByRole('button', { name: 'Extract Tokens' })` | Disabled until URL entered |
+| Category filter | `getByRole('button', { name: /^All \(/ })` | Contains count: "All (404)" |
+| Card button | `main button` filtered by `/dark\|light/` | Avoids form/header buttons |
 
-### Feedback
+### Style Detail Page (`/style/[id]`)
 
 | Element | Selector | Notes |
 |---------|----------|-------|
-| error msg | `[data-testid="error-msg"]` or `.error` | |
-| success msg | `[data-testid="success-msg"]` | |
-| loading spinner | `[data-testid="loading"]` | |
+| Page title | `getByRole('heading', { level: 1 })` | Card name (e.g. "099") |
+| Color section | `getByRole('heading', { name: 'COLOR PALETTE' })` | English interface |
+| Export tabs | `getByRole('button', { name: 'DESIGN.md' })` etc. | 5 tabs |
+| Copy button | `getByRole('button', { name: 'Copy', exact: true })` | Multiple "Copy" on page |
+| Download button | `getByRole('button', { name: 'Download', exact: true })` | Must use exact |
+| Figma input | `getByPlaceholder(/Paste Figma/)` | Fallback for both languages |
 
 ## Architecture
 
 | Aspect | Value | Notes |
 |--------|-------|-------|
-| Architecture | monolith / separated | Frontend + backend in one repo or separate? |
-| Backend server | `<port>` or `embedded` | e.g. `3001` or `embedded in frontend` |
-| How to restart backend | `<command>` | e.g. `cd backend && npm run dev` |
+| Framework | Next.js App Router | JavaScript (not TypeScript) |
+| Database | Turso (libSQL) + sql.js fallback | Local SQLite in dev |
+| Styling | CSS Modules + Tailwind CSS | |
+| Browser | Playwright (Chromium) | For design token extraction |
+| Hosting | Vercel + Cloudflare Worker proxy | |
+| Backend | Embedded in Next.js | API routes in `app/api/` |
+| Restart | `npx next dev -p 3000` | |
 
 ## SPA Routing
 
-- Framework: <e.g. React Router / Vue Router / Next.js>
-- URL changes without page reload: <yes/no>
-- History API: <yes/no>
-- Hash routing: <yes/no>
+- Framework: Next.js App Router
+- URL changes without page reload: yes
+- History API: yes
+- Hash routing: no
+
+## Hydration Strategy
+
+| Framework | Wait Strategy |
+|-----------|---------------|
+| Next.js App Router | `domcontentloaded` + `waitForTimeout(2000)` |
+| Do NOT use | `networkidle` (background fetches keep it busy) |
+
+Card grid data loads from `/api/cards` on mount. Category counts update after data fetch.
+
+## Language
+
+- Default: English
+- Toggle: `EN` / `中文` buttons in header
+- All selectors must use English text (default state)
 
 ## Dynamic Content Conventions
 
-- User-specific data: use `toContainText`, never `toHaveText`
-- Timestamps: normalize or use regex
-- Random IDs: avoid asserting on auto-generated values
-- Pagination: test first/last page, boundary conditions
+- Card count: "404 styles" — use regex `/styles/`
+- Category buttons: contain counts like "All (404)"
+- Color swatches: button text = "ColorName #hex Copy usage..."
+- Card buttons: contain name + category + theme (dark/light)
+
+## Known Issues
+
+| Issue | Selector Impact |
+|-------|----------------|
+| Category buttons contain counts | Use `/^All \(/` not `/All/` to avoid matching card names |
+| Multiple "Copy" buttons | Must use `exact: true` for export panel Copy/Download |
+| Form buttons in main | `main button` first() may hit disabled extract button — filter by text |
 
 ## Project Conventions
 
 | Convention | Value | Notes |
 |------------|-------|-------|
-| BASE_URL | `<default>` | Override with env |
-| auth method | API / UI | See auth.setup.ts |
-| multi-user roles | `<roles>` | e.g. admin, user, guest |
+| BASE_URL | `http://localhost:3000` | Override with env |
+| Default port | 3000 | `npx next dev -p 3000` |
+| Test card ID | `e4a7b5f3-f393-4f6d-b4a5-ecf874024bed` | "099" agency card |
+| Auth | none | All routes public |
 
 ## Selector Fixes (Healer memory)
 
-Persists selector repairs across sessions. Prevents the same selector from being healed repeatedly.
-
 | Date | Route | Old Selector | New Selector | Reason |
 |------|-------|-------------|-------------|--------|
-| | | | | |
-
----
+| 2026-06-12 | `/` | `getByPlaceholder('Enter website URL')` | `getByPlaceholder('https://stripe.com')` | Actual placeholder text |
+| 2026-06-12 | `/` | `getByPlaceholder('Search websites...')` | `getByPlaceholder('Search sites...')` | Actual placeholder text |
+| 2026-06-12 | `/` | `getByRole('button', { name: /All/ })` | `getByRole('button', { name: /^All \(/ })` | Avoids matching card names |
+| 2026-06-12 | `/style/[id]` | `getByRole('button', { name: 'Copy' })` | `getByRole('button', { name: 'Copy', exact: true })` | Multiple copy buttons |
 
 ## Assertion Fixes (Healer memory)
 
-Persists assertion repairs (typos, spec drift) across sessions.
-
 | Date | Test | Old Assertion | New Assertion | Reason |
 |------|------|-------------|-------------|--------|
-| | | | | |
-
----
+| 2026-06-12 | Home heading | `getByRole('heading', { name: /提取/ })` | `locator('h1')` | Default language is English |
 
 ## Changelog
 
 | Date | Change | By |
 |------|--------|-----|
-| | | |
-
----
-
-> **Updating this file**: After each E2E exploration (Step 4), extract new shared patterns and update this file. Generator (Step 6) reads this before writing tests. After Healer repairs (Step 9): append selector fixes to **Selector Fixes** table, append assertion fixes to **Assertion Fixes** section.
+| 2026-06-12 | Initial exploration — 8 routes, 2 Page Objects | E2E all mode |

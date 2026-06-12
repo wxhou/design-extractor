@@ -25,7 +25,7 @@ export class BasePage {
   ) {
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
     await this.page.goto(url, {
-      waitUntil: options?.waitUntil ?? 'domcontentloaded',
+      waitUntil: options?.waitUntil ?? 'networkidle',
     });
   }
 
