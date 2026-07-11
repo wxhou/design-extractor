@@ -24,6 +24,7 @@ export default function DashboardClient({ user, remainingCredits }) {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(Boolean(user));
   const [working, setWorking] = useState(false);
+  const [billingWorking, setBillingWorking] = useState(false);
   const [error, setError] = useState(null);
 
   async function loadKeys() {
@@ -101,6 +102,36 @@ export default function DashboardClient({ user, remainingCredits }) {
     setCopied(true);
   }
 
+  async function startCheckout(plan) {
+    setBillingWorking(true);
+    setError(null);
+    const response = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan }),
+    });
+    const body = await parseJson(response);
+    if (!response.ok || !body?.url) {
+      setError(body?.error || 'Failed to start checkout');
+      setBillingWorking(false);
+      return;
+    }
+    window.location.assign(body.url);
+  }
+
+  async function manageBilling() {
+    setBillingWorking(true);
+    setError(null);
+    const response = await fetch('/api/stripe/portal', { method: 'POST' });
+    const body = await parseJson(response);
+    if (!response.ok || !body?.url) {
+      setError(body?.error || 'Failed to open billing portal');
+      setBillingWorking(false);
+      return;
+    }
+    window.location.assign(body.url);
+  }
+
   function signInWithEmail(event) {
     event.preventDefault();
     if (!email.trim()) return;
@@ -160,6 +191,25 @@ export default function DashboardClient({ user, remainingCredits }) {
               <button type="button" className="dashboard-secondary" onClick={() => signOut({ callbackUrl: '/dashboard' })}>
                 Sign out
               </button>
+            </section>
+
+            <section className="dashboard-card dashboard-billing">
+              <div>
+                <p className="dashboard-label">Billing</p>
+                <h2>Upgrade API credits</h2>
+                <p>Starter includes 500 monthly credits. Pro includes 2,000 monthly credits.</p>
+              </div>
+              <div className="dashboard-billing-actions">
+                <button type="button" onClick={() => startCheckout('starter')} disabled={billingWorking}>
+                  Upgrade Starter
+                </button>
+                <button type="button" onClick={() => startCheckout('pro')} disabled={billingWorking}>
+                  Upgrade Pro
+                </button>
+                <button type="button" className="dashboard-secondary" onClick={manageBilling} disabled={billingWorking}>
+                  Manage billing
+                </button>
+              </div>
             </section>
 
             <section className="dashboard-card dashboard-key-panel">
@@ -222,7 +272,7 @@ export default function DashboardClient({ user, remainingCredits }) {
               <h2>Extract a design from a URL</h2>
               <pre><code>{CURL_EXAMPLE}</code></pre>
               <p className="dashboard-note">
-                Stripe checkout is not enabled in this task. Paid plan controls will appear here later.
+                Test Stripe locally with: stripe listen --forward-to localhost:3000/api/stripe/webhook
               </p>
             </section>
           </div>
@@ -371,6 +421,17 @@ export default function DashboardClient({ user, remainingCredits }) {
           align-content: start;
           display: grid;
           gap: 20px;
+        }
+
+        .dashboard-billing {
+          align-content: start;
+          display: grid;
+          gap: 18px;
+        }
+
+        .dashboard-billing-actions {
+          display: grid;
+          gap: 10px;
         }
 
         .dashboard-stat {
