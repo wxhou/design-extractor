@@ -7,17 +7,30 @@ export const metadata = {
   title: 'Dashboard | Design Extractor',
 };
 
-async function loadRemainingCredits(userId) {
+async function loadDashboardData(userId) {
   if (!userId) {
-    return null;
+    return { remainingCredits: null, hasStripeCustomer: false };
   }
 
   try {
     const db = await getDb();
-    return await getDashboardCredits(db, userId);
+    const [remainingCredits, { rows }] = await Promise.all([
+      getDashboardCredits(db, userId),
+      db.execute({
+        sql: `SELECT stripe_customer_id
+              FROM users
+              WHERE id = ?
+              LIMIT 1`,
+        args: [userId],
+      }),
+    ]);
+    return {
+      remainingCredits,
+      hasStripeCustomer: Boolean(rows[0]?.stripe_customer_id),
+    };
   } catch (error) {
-    console.error('[dashboard] Failed to load credits:', error);
-    return null;
+    console.error('[dashboard] Failed to load dashboard data:', error);
+    return { remainingCredits: null, hasStripeCustomer: false };
   }
 }
 
@@ -31,12 +44,13 @@ export default async function DashboardPage() {
         image: session.user.image || null,
       }
     : null;
-  const remainingCredits = await loadRemainingCredits(user?.id);
+  const { remainingCredits, hasStripeCustomer } = await loadDashboardData(user?.id);
 
   return (
     <DashboardClient
       user={user}
       remainingCredits={remainingCredits}
+      hasStripeCustomer={hasStripeCustomer}
     />
   );
 }

@@ -16,7 +16,7 @@ async function parseJson(response) {
   }
 }
 
-export default function DashboardClient({ user, remainingCredits }) {
+export default function DashboardClient({ user, remainingCredits, hasStripeCustomer = false }) {
   const [keys, setKeys] = useState([]);
   const [keyName, setKeyName] = useState('');
   const [plaintext, setPlaintext] = useState(null);
@@ -206,9 +206,11 @@ export default function DashboardClient({ user, remainingCredits }) {
                 <button type="button" onClick={() => startCheckout('pro')} disabled={billingWorking}>
                   Upgrade Pro
                 </button>
-                <button type="button" className="dashboard-secondary" onClick={manageBilling} disabled={billingWorking}>
-                  Manage billing
-                </button>
+                {hasStripeCustomer && (
+                  <button type="button" className="dashboard-secondary" onClick={manageBilling} disabled={billingWorking}>
+                    Manage billing
+                  </button>
+                )}
               </div>
             </section>
 
