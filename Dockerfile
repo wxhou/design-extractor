@@ -94,6 +94,9 @@ RUN mkdir -p ./public/screenshots
 
 EXPOSE 3000
 
+# Operators: after deploy, before serving auth features, run:
+#   npm run migrate:auth  (requires TURSO_URL and TURSO_AUTH_TOKEN)
+
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
