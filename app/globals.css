@@ -200,6 +200,18 @@ body {
   max-width: 480px;
   margin: 0 auto;
 }
+.hero-api-cta {
+  margin: 14px auto 0;
+  font-size: 13px;
+}
+.hero-api-cta a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.hero-api-cta a:hover {
+  text-decoration: underline;
+}
 
 /* ============================
    SEARCH

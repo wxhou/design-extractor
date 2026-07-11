@@ -2,8 +2,8 @@ import './globals.css'
 import { Agentation } from 'agentation'
 
 export const metadata = {
-  title: 'Design Extractor',
-  description: 'Extract DESIGN.md tokens from any website',
+  title: 'Url2Design',
+  description: 'Turn any URL into design tokens — instant extract, API for agents',
   icons: {
     icon: '/favicon.svg',
   },

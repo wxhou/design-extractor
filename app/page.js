@@ -153,6 +153,7 @@ export default function Home() {
   const [url, setUrl]           = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
+  const [upgradeUrl, setUpgradeUrl] = useState(null);
   const [output, setOutput]     = useState(null);
   const [locale, setLocale]     = useState('en');
 
@@ -264,6 +265,7 @@ export default function Home() {
     if (!targetUrl) return;
     setLoading(true);
     setError(null);
+    setUpgradeUrl(null);
     setOutput(null);
     try {
       const res = await fetch('/api/extract', {
@@ -275,7 +277,9 @@ export default function Home() {
 
       // 处理 API 级别的错误（URL 验证失败等）
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Extraction failed');
+        const errMsg = typeof data.error === 'object' ? data.error.message : data.error;
+        if (data.upgradeUrl) setUpgradeUrl(data.upgradeUrl);
+        throw new Error(errMsg || 'Extraction failed');
       }
 
       // 如果返回 cardId，跳转到详情页
@@ -348,7 +352,7 @@ export default function Home() {
             <LogoIcon />
           </div>
           <div className="header-logo-text">
-            Design<span>Extractor</span>
+            Url<span>2Design</span>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -368,15 +372,20 @@ export default function Home() {
 
           <h1 className="hero-title">
             {locale === 'zh' ? (
-              <>提取任意网址的<br /><span className="accent">DESIGN.md</span></>
+              <>任意 URL → <span className="accent">design</span></>
             ) : (
-              <>Turn any URL into a<br /><span className="accent">DESIGN.md</span></>
+              <>URL → <span className="accent">design</span></>
             )}
           </h1>
           <p className="hero-subtitle">
             {locale === 'zh'
-              ? '提取颜色、字体、间距和组件，生成结构化的 DESIGN.md，供 AI 代理直接使用。'
-              : 'Extract colors, typography, spacing, and components into a structured DESIGN.md your AI agent can use.'}
+              ? '从任意网址即时提取颜色、字体、间距与组件，生成 AI agent 可用的 DESIGN.md。'
+              : 'Instantly extract colors, typography, spacing, and components into DESIGN.md for your AI agents.'}
+          </p>
+          <p className="hero-api-cta">
+            <a href="/dashboard">
+              {locale === 'zh' ? 'API for agents → 获取 Key' : 'API for agents → Get keys'}
+            </a>
           </p>
         </div>
 
@@ -480,11 +489,25 @@ export default function Home() {
           {locale === 'zh' && (
             <div className="error-block" style={{ marginBottom: '24px' }}>
               <strong>错误：</strong>{error}
+              {upgradeUrl && (
+                <> {' '}
+                  <a href={upgradeUrl} style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                    开通 API →
+                  </a>
+                </>
+              )}
             </div>
           )}
           {!locale.startsWith('zh') && (
             <div className="error-block" style={{ marginBottom: '24px' }}>
               {error}
+              {upgradeUrl && (
+                <> {' '}
+                  <a href={upgradeUrl} style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                    Get API keys →
+                  </a>
+                </>
+              )}
             </div>
           )}
           </>
@@ -596,7 +619,7 @@ export default function Home() {
       </main>
 
       <footer className="footer">
-        <span>Design Extractor</span>
+        <span>Url2Design</span>
       </footer>
     </div>
   );

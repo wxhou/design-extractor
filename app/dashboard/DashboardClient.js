@@ -142,7 +142,7 @@ export default function DashboardClient({ user, remainingCredits, hasStripeCusto
     <main className="dashboard-page">
       <section className="dashboard-shell">
         <div className="dashboard-hero">
-          <a className="dashboard-home" href="/">Design Extractor</a>
+          <a className="dashboard-home" href="/">Url2Design</a>
           <p className="dashboard-kicker">Paid API dashboard</p>
           <h1>Manage API keys for URL to design extraction.</h1>
           <p className="dashboard-subtitle">

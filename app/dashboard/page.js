@@ -4,7 +4,7 @@ import { getDashboardCredits } from '@/src/dashboard-keys.js';
 import DashboardClient from './DashboardClient.js';
 
 export const metadata = {
-  title: 'Dashboard | Design Extractor',
+  title: 'Dashboard | Url2Design',
 };
 
 async function loadDashboardData(userId) {
