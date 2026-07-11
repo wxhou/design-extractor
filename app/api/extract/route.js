@@ -1,36 +1,8 @@
-import { extractDesignTokens, isValidDomain, normalizeUrl, generateTokensJson, generateVariablesCss, generateThemeCss } from '@/src/extractor-v2.js';
+import { extractDesignTokens, isValidDomain, normalizeUrl } from '@/src/extractor-v2.js';
 import { getDb } from '@/src/db.js';
 import { checkFreeIpLimit, getFreeExtractIp, getUtcDay, incrementFreeIpUsage } from '@/src/rate-limit.js';
-import { uploadToSMMS } from '@/src/smms.js';
-import fs from 'fs';
-import path from 'path';
+import { cleanupLocalScreenshot, findExistingCard, saveExtraction } from '@/src/save-extraction.js';
 import { randomUUID } from 'crypto';
-
-// screenshots 目录：本地备用
-const SCREENSHOTS_DIR = path.join(process.cwd(), 'public', 'screenshots');
-
-async function saveScreenshot(screenshotBuffer, cardId) {
-  if (!screenshotBuffer) return null;
-
-  // 保存为 base64 存入数据库
-  const result = await uploadToSMMS(screenshotBuffer, `${cardId}.png`);
-
-  if (result.success) {
-    console.log('[extract] Screenshot saved as base64:', result.url.substring(0, 50) + '...');
-    return result.url;
-  }
-
-  // 失败回退到本地存储
-  console.log('[extract] Save failed, falling back to local storage:', result.error);
-
-  if (!fs.existsSync(SCREENSHOTS_DIR)) {
-    fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
-  }
-  const screenshotPath = path.join(SCREENSHOTS_DIR, `${cardId}.png`);
-  fs.writeFileSync(screenshotPath, screenshotBuffer);
-
-  return `/api/screenshots/${cardId}.png`;
-}
 
 function getFriendlyError(errorMessage) {
   if (!errorMessage) return '提取失败，请稍后重试';
@@ -54,21 +26,6 @@ function getFriendlyError(errorMessage) {
   }
 
   return '提取失败，请稍后重试';
-}
-
-async function findExistingCard(normalizedHost) {
-  const db = await getDb();
-  const result = await db.execute({
-    sql: 'SELECT id, url, name FROM cards WHERE url LIKE ?',
-    args: [`%${normalizedHost}%`],
-  });
-  for (const row of result.rows) {
-    const normalized = normalizeUrl(row.url);
-    if (normalized.normalized === normalizedHost) {
-      return { id: row.id, url: row.url, name: row.name };
-    }
-  }
-  return null;
 }
 
 const extractionJobs = new Map();
@@ -114,7 +71,7 @@ export async function POST(request) {
   try {
     // 检查重复
     extractionJobs.set(jobId, { status: 'checking_duplicate', progress: 10 });
-    const existing = await findExistingCard(normalized.normalized);
+    const existing = await findExistingCard(db, normalized.normalized);
     if (existing) {
       console.log('[extract] Duplicate found:', existing.id);
       extractionJobs.set(jobId, { status: 'done', progress: 100, cardId: existing.id, isDuplicate: true });
@@ -148,108 +105,27 @@ export async function POST(request) {
       }, { status: 500 });
     }
 
-    cardId = randomUUID();
     extractionJobs.set(jobId, { status: 'saving', progress: 85 });
-
-    // 保存截图（截图失败不影响主流程）
-    if (result.screenshot) {
-      screenshotPath = await saveScreenshot(result.screenshot, cardId);
-      console.log('[extract] Screenshot saved:', screenshotPath);
-    } else {
-      console.log('[extract] No screenshot captured');
-    }
-
-    const now = new Date().toISOString();
-
-    if (!result.siteName || !cardId) {
-      throw new Error('Invalid card data: missing required fields');
-    }
-
-    // 生成多格式输出
-    const tokensJson = generateTokensJson(result);
-    const variablesCss = generateVariablesCss(result);
-    const themeCss = generateThemeCss(result);
 
     // 写入数据库（Turso 或本地 SQLite）- 使用 UPSERT 保证幂等
     extractionJobs.set(jobId, { status: 'saving_to_db', progress: 90 });
-    await db.execute({
-      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, spacing, shadows, border_radius, raw_data, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-              name = excluded.name,
-              url = excluded.url,
-              preview = excluded.preview,
-              screenshot = excluded.screenshot,
-              colors = excluded.colors,
-              fonts = excluded.fonts,
-              north_star = excluded.north_star,
-              color_scheme = excluded.color_scheme,
-              category = excluded.category,
-              typography = excluded.typography,
-              type_scale = excluded.type_scale,
-              gradient = excluded.gradient,
-              spacing = excluded.spacing,
-              shadows = excluded.shadows,
-              border_radius = excluded.border_radius,
-              raw_data = excluded.raw_data,
-              created_at = excluded.created_at`,
-      args: [
-        cardId,
-        result.siteName,
-        normalized.full,
-        screenshotPath,
-        screenshotPath,
-        JSON.stringify(result.colors || []),
-        JSON.stringify(result.fonts || []),
-        result.northStar || null,
-        result.colorScheme || 'light',
-        result.category || 'minimal',
-        JSON.stringify(result.typography || {}),
-        JSON.stringify(result.typeScale || {}),
-        JSON.stringify(result.gradient || []),
-        JSON.stringify(result.spacing || {}),
-        JSON.stringify(result.shadows || {}),
-        JSON.stringify(result.borderRadius || {}),
-        JSON.stringify({ tokensJson, variablesCss, themeCss, animations: result.animations }),
-        now,
-      ],
-    });
+    const saved = await saveExtraction(db, normalized, result);
+    cardId = saved.cardId;
+    screenshotPath = saved.screenshot;
 
     console.log('[extract] Card saved:', cardId);
     extractionJobs.set(jobId, { status: 'done', progress: 100, cardId, siteName: result.siteName });
 
     return Response.json({
       success: true,
-      cardId,
-      isDuplicate: false,
-      designMd: result.designMd,
-      siteName: result.siteName,
-      colors: result.colors,
-      fonts: result.fonts,
-      typography: result.typography,
-      gradient: result.gradient,
-      typeScale: result.typeScale,
-      spacing: result.spacing,
-      shadows: result.shadows,
-      borderRadius: result.borderRadius,
-      animations: result.animations,
-      northStar: result.northStar,
-      colorScheme: result.colorScheme,
-      category: result.category,
-      screenshot: screenshotPath,
-      cssSize: result.cssSize,
-      version: 'v2',
+      ...saved.data,
       jobId,
     });
   } catch (error) {
     console.error('[extract] Error:', error.message, error.stack);
     extractionJobs.set(jobId, { status: 'error', progress: 100, error: error.message });
     // 清理截图
-    if (screenshotPath) {
-      try {
-        fs.unlinkSync(path.join(process.cwd(), 'public', screenshotPath));
-      } catch {}
-    }
+    cleanupLocalScreenshot(screenshotPath);
     return Response.json(
       { success: false, error: getFriendlyError(error.message) },
       { status: 500 },
