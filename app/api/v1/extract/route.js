@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { jsonErr, jsonOk } from '@/src/api-response.js';
 import { getDb } from '@/src/db.js';
-import { computeConsume, getRemainingCredits } from '@/src/credits.js';
+import { consumeCreditAtomically, getRemainingCredits } from '@/src/credits.js';
 import { extractDesignTokens, isValidDomain, normalizeUrl } from '@/src/extractor-v2.js';
 import { requireApiKey, ensureHasCredits } from '@/src/v1-auth.js';
 import { findExistingCard, saveExtraction } from '@/src/save-extraction.js';
@@ -42,36 +42,16 @@ async function recordUsage(db, auth, normalized, status, credits, latencyMs, now
 }
 
 async function consumeCredit(db, auth, now, normalized, latencyMs) {
-  const nextBalance = computeConsume(auth.balance);
-  await db.batch([
-    {
-      sql: `UPDATE credit_balances
-            SET monthly_used = ?, pack_balance = ?, updated_at = ?
-            WHERE user_id = ?`,
-      args: [nextBalance.monthly_used, nextBalance.pack_balance, now, auth.userId],
-    },
-    {
-      sql: `INSERT INTO usage_events (id, user_id, key_id, endpoint, url_host, status, credits, latency_ms, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        randomUUID(),
-        auth.userId,
-        auth.keyId,
-        ENDPOINT,
-        urlHost(normalized),
-        'success',
-        1,
-        latencyMs,
-        now,
-      ],
-    },
-    {
-      sql: 'UPDATE api_keys SET last_used_at = ? WHERE id = ?',
-      args: [now, auth.keyId],
-    },
-  ]);
-
-  return nextBalance;
+  return consumeCreditAtomically(db, {
+    userId: auth.userId,
+    keyId: auth.keyId,
+    endpoint: ENDPOINT,
+    urlHost: urlHost(normalized),
+    status: 'success',
+    credits: 1,
+    latencyMs,
+    now,
+  });
 }
 
 export async function POST(request) {
@@ -141,6 +121,10 @@ export async function POST(request) {
   } catch (error) {
     const now = new Date().toISOString();
     const latencyMs = Date.now() - started;
+    if (error.status === 402 && error.code === 'insufficient_credits') {
+      await markApiKeyUsed(db, auth.keyId, now);
+      return jsonErr(error.status, error.code, error.message, error.usage);
+    }
     await recordUsage(db, auth, normalized, 'error', 0, latencyMs, now);
     await markApiKeyUsed(db, auth.keyId, now);
     return jsonErr(extractionStatus(error.message), 'extraction_failed', error.message, { remaining: auth.remaining });

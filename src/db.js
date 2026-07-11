@@ -72,7 +72,10 @@ function executeSqlJsStatement(db, sql, args = []) {
     rows.push(row);
   }
   stm.free();
-  return { rows };
+  return {
+    rows,
+    rowsAffected: isWriteStatement(sql) ? db.getRowsModified() : 0,
+  };
 }
 
 function isWriteStatement(sql) {
@@ -134,14 +137,17 @@ export async function getDb() {
         // 兼容对象格式调用
         const query = normalizeQuery(sql, args);
         const result = await turso.execute(query);
-        return { rows: result.rows };
+        return { rows: result.rows, rowsAffected: Number(result.rowsAffected || 0) };
       },
       async batch(statements, mode = 'write') {
         const results = await turso.batch(
           statements.map(statement => normalizeQuery(statement)),
           mode,
         );
-        return results.map(result => ({ rows: result.rows }));
+        return results.map(result => ({
+          rows: result.rows,
+          rowsAffected: Number(result.rowsAffected || 0),
+        }));
       },
     };
   }

@@ -21,3 +21,9 @@ Verification:
 Notes:
 - Browserless/local chromium manual success-path test was not run in this environment.
 - Context7 docs lookup was unavailable because the monthly quota was exceeded.
+
+### Billing TOCTOU Fix
+
+- Replaced stale request-start balance writes with `consumeCreditAtomically`, which re-reads `credit_balances`, conditionally updates against the observed balance, retries once on conflict, and only inserts success usage when the deduct statement affected a row.
+- Preserved extraction failure accounting with `usage_events.credits = 0`.
+- Verification: `node --test tests/unit/*.test.js` passed (26/26).
