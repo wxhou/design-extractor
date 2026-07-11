@@ -49,6 +49,36 @@ function getTursoDb() {
   return tursoClient;
 }
 
+function normalizeQuery(sql, args = []) {
+  if (typeof sql === 'object' && sql !== null) {
+    return {
+      sql: sql.sql,
+      args: sql.args || [],
+    };
+  }
+  return { sql, args };
+}
+
+function executeSqlJsStatement(db, sql, args = []) {
+  const stm = db.prepare(sql);
+  if (args.length > 0) stm.bind(args.map(String));
+  const columns = stm.getColumnNames();
+  const rows = [];
+  while (stm.step()) {
+    const values = stm.get();
+    // 转换为 {col: val} 格式，与 Turso 保持一致
+    const row = {};
+    columns.forEach((col, i) => { row[col] = values[i]; });
+    rows.push(row);
+  }
+  stm.free();
+  return { rows };
+}
+
+function isWriteStatement(sql) {
+  return /^(INSERT|UPDATE|DELETE)/i.test(sql.trim());
+}
+
 async function getSqlDb() {
   if (!_dbInstance) {
     const SQL = await _sqlPromise;
@@ -102,12 +132,16 @@ export async function getDb() {
     return {
       async execute(sql, args = []) {
         // 兼容对象格式调用
-        if (typeof sql === 'object' && sql !== null) {
-          args = sql.args || [];
-          sql = sql.sql;
-        }
-        const result = await turso.execute({ sql, args });
+        const query = normalizeQuery(sql, args);
+        const result = await turso.execute(query);
         return { rows: result.rows };
+      },
+      async batch(statements, mode = 'write') {
+        const results = await turso.batch(
+          statements.map(statement => normalizeQuery(statement)),
+          mode,
+        );
+        return results.map(result => ({ rows: result.rows }));
       },
     };
   }
@@ -117,27 +151,32 @@ export async function getDb() {
   return {
     async execute(sql, args = []) {
       // 兼容对象格式调用
-      if (typeof sql === 'object' && sql !== null) {
-        args = sql.args || [];
-        sql = sql.sql;
-      }
-      const stm = db.prepare(sql);
-      if (args.length > 0) stm.bind(args.map(String));
-      const columns = stm.getColumnNames();
-      const rows = [];
-      while (stm.step()) {
-        const values = stm.get();
-        // 转换为 {col: val} 格式，与 Turso 保持一致
-        const row = {};
-        columns.forEach((col, i) => { row[col] = values[i]; });
-        rows.push(row);
-      }
-      stm.free();
-      if (/^(INSERT|UPDATE|DELETE)/i.test(sql.trim())) {
+      const query = normalizeQuery(sql, args);
+      const result = executeSqlJsStatement(db, query.sql, query.args);
+      if (isWriteStatement(query.sql)) {
         const data = db.export();
         fs.writeFileSync(DB_PATH, Buffer.from(data));
       }
-      return { rows };
+      return result;
+    },
+    async batch(statements) {
+      const queries = statements.map(statement => normalizeQuery(statement));
+      const results = [];
+      db.run('BEGIN');
+      try {
+        for (const query of queries) {
+          results.push(executeSqlJsStatement(db, query.sql, query.args));
+        }
+        db.run('COMMIT');
+      } catch (error) {
+        db.run('ROLLBACK');
+        throw error;
+      }
+      if (queries.some(query => isWriteStatement(query.sql))) {
+        const data = db.export();
+        fs.writeFileSync(DB_PATH, Buffer.from(data));
+      }
+      return results;
     },
   };
 }

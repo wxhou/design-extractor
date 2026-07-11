@@ -60,9 +60,18 @@ function mapVerificationToken(row) {
 }
 
 export function TursoAdapter({ db } = {}) {
+  async function getClient() {
+    return db ?? await getDb();
+  }
+
   async function execute(sql, args = []) {
-    const client = db ?? await getDb();
+    const client = await getClient();
     return client.execute({ sql, args });
+  }
+
+  async function batch(statements, mode = 'write') {
+    const client = await getClient();
+    return client.batch(statements, mode);
   }
 
   async function getUser(id) {
@@ -91,28 +100,30 @@ export function TursoAdapter({ db } = {}) {
         emailVerified: user.emailVerified ?? null,
       };
 
-      await execute(
-        `INSERT INTO users (id, email, name, image, email_verified, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          createdUser.id,
-          createdUser.email,
-          createdUser.name,
-          createdUser.image,
-          toDbDate(createdUser.emailVerified),
-          now,
-        ],
-      );
-      await execute(
-        `INSERT INTO subscriptions (user_id, plan, status, updated_at)
-         VALUES (?, ?, ?, ?)`,
-        [createdUser.id, 'free', 'active', now],
-      );
-      await execute(
-        `INSERT INTO credit_balances (user_id, monthly_quota, monthly_used, pack_balance, period_start, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [createdUser.id, FREE_MONTHLY_QUOTA, 0, 0, now, now],
-      );
+      await batch([
+        {
+          sql: `INSERT INTO users (id, email, name, image, email_verified, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: [
+            createdUser.id,
+            createdUser.email,
+            createdUser.name,
+            createdUser.image,
+            toDbDate(createdUser.emailVerified),
+            now,
+          ],
+        },
+        {
+          sql: `INSERT INTO subscriptions (user_id, plan, status, updated_at)
+                VALUES (?, ?, ?, ?)`,
+          args: [createdUser.id, 'free', 'active', now],
+        },
+        {
+          sql: `INSERT INTO credit_balances (user_id, monthly_quota, monthly_used, pack_balance, period_start, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: [createdUser.id, FREE_MONTHLY_QUOTA, 0, 0, now, now],
+        },
+      ]);
 
       return createdUser;
     },
@@ -256,17 +267,12 @@ export function TursoAdapter({ db } = {}) {
 
     async useVerificationToken({ identifier, token }) {
       const result = await execute(
-        'SELECT * FROM verification_tokens WHERE identifier = ? AND token = ?',
+        `DELETE FROM verification_tokens
+         WHERE identifier = ? AND token = ?
+         RETURNING *`,
         [identifier, token],
       );
-      const verificationToken = mapVerificationToken(result.rows[0]);
-      if (!verificationToken) return null;
-
-      await execute(
-        'DELETE FROM verification_tokens WHERE identifier = ? AND token = ?',
-        [identifier, token],
-      );
-      return verificationToken;
+      return mapVerificationToken(result.rows[0]);
     },
   };
 }
