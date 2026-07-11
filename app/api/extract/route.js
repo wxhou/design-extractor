@@ -1,5 +1,6 @@
 import { extractDesignTokens, isValidDomain, normalizeUrl, generateTokensJson, generateVariablesCss, generateThemeCss } from '@/src/extractor-v2.js';
 import { getDb } from '@/src/db.js';
+import { checkFreeIpLimit, getFreeExtractIp, getUtcDay, incrementFreeIpUsage } from '@/src/rate-limit.js';
 import { uploadToSMMS } from '@/src/smms.js';
 import fs from 'fs';
 import path from 'path';
@@ -88,6 +89,22 @@ export async function POST(request) {
     return Response.json({ success: false, error: '请输入有效的网址' }, { status: 400 });
   }
 
+  const db = await getDb();
+  const ip = getFreeExtractIp(request.headers);
+  const day = getUtcDay();
+  const freeLimit = await checkFreeIpLimit(db, ip, { day });
+  if (!freeLimit.allowed) {
+    return Response.json({
+      success: false,
+      error: {
+        code: 'free_limit_exceeded',
+        message: '今日免费额度已用完，请开通 API',
+      },
+      upgradeUrl: '/dashboard',
+    }, { status: 429 });
+  }
+  await incrementFreeIpUsage(db, ip, day);
+
   let cardId;
   let screenshotPath = null;
 
@@ -155,7 +172,6 @@ export async function POST(request) {
 
     // 写入数据库（Turso 或本地 SQLite）- 使用 UPSERT 保证幂等
     extractionJobs.set(jobId, { status: 'saving_to_db', progress: 90 });
-    const db = await getDb();
     await db.execute({
       sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, spacing, shadows, border_radius, raw_data, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
