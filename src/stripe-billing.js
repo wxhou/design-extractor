@@ -36,6 +36,11 @@ export function getSubscriptionPeriodEnd(subscription) {
   return new Date(subscription.current_period_end * 1000).toISOString();
 }
 
+export function getSubscriptionPeriodStart(subscription) {
+  if (!subscription?.current_period_start) return null;
+  return new Date(subscription.current_period_start * 1000).toISOString();
+}
+
 export async function findUserIdByStripeCustomer(db, customerId) {
   if (!customerId) return null;
   const { rows } = await db.execute({
@@ -75,10 +80,74 @@ export async function getOrCreateStripeCustomer({ db, stripe, user }) {
   return customer.id;
 }
 
+async function loadEntitlementState(db, userId) {
+  const { rows } = await db.execute({
+    sql: `SELECT s.plan, cb.period_start
+          FROM subscriptions s
+          LEFT JOIN credit_balances cb ON cb.user_id = s.user_id
+          WHERE s.user_id = ?
+          LIMIT 1`,
+    args: [userId],
+  });
+  return rows[0] || null;
+}
+
+function hasAdvancedPeriod(previousPeriodStart, nextPeriodStart) {
+  if (!previousPeriodStart || !nextPeriodStart) return false;
+  return new Date(nextPeriodStart).getTime() > new Date(previousPeriodStart).getTime();
+}
+
+function shouldResetMonthlyUsage(state, input, entitlement) {
+  if (input.resetMonthlyUsed) return true;
+  if (!state) return true;
+  if (state.plan !== entitlement.plan) return true;
+  return hasAdvancedPeriod(state.period_start, input.periodStart);
+}
+
+function buildCreditBalanceStatement({ input, entitlement, now, resetMonthlyUsed }) {
+  const periodStart = input.periodStart || now;
+  const updateMonthlyUsed = resetMonthlyUsed
+    ? 'monthly_used = excluded.monthly_used'
+    : 'monthly_used = credit_balances.monthly_used';
+
+  return {
+    sql: `INSERT INTO credit_balances (user_id, monthly_quota, monthly_used, pack_balance, period_start, updated_at)
+          VALUES (?, ?, ?, 0, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            monthly_quota = excluded.monthly_quota,
+            ${updateMonthlyUsed},
+            period_start = COALESCE(excluded.period_start, credit_balances.period_start),
+            updated_at = excluded.updated_at`,
+    args: [
+      input.userId,
+      entitlement.monthlyQuota,
+      entitlement.monthlyUsed,
+      periodStart,
+      now,
+    ],
+  };
+}
+
+export async function findBlockingCheckoutSubscription(db, userId) {
+  const { rows } = await db.execute({
+    sql: `SELECT stripe_subscription_id, status
+          FROM subscriptions
+          WHERE user_id = ?
+            AND stripe_subscription_id IS NOT NULL
+            AND stripe_subscription_id <> ''
+            AND status IN ('active', 'trialing', 'past_due')
+          LIMIT 1`,
+    args: [userId],
+  });
+  return rows[0] || null;
+}
+
 export async function applySubscriptionEntitlement(db, input) {
   const now = input.now || new Date().toISOString();
   const entitlement = getPlanEntitlement(input.plan, { canceled: input.canceled });
   const status = input.canceled ? 'canceled' : input.status || 'active';
+  const state = await loadEntitlementState(db, input.userId);
+  const resetMonthlyUsed = shouldResetMonthlyUsage(state, input, entitlement);
   const statements = [];
 
   if (input.customerId) {
@@ -109,22 +178,7 @@ export async function applySubscriptionEntitlement(db, input) {
         now,
       ],
     },
-    {
-      sql: `INSERT INTO credit_balances (user_id, monthly_quota, monthly_used, pack_balance, period_start, updated_at)
-            VALUES (?, ?, ?, 0, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-              monthly_quota = excluded.monthly_quota,
-              monthly_used = excluded.monthly_used,
-              period_start = excluded.period_start,
-              updated_at = excluded.updated_at`,
-      args: [
-        input.userId,
-        entitlement.monthlyQuota,
-        entitlement.monthlyUsed,
-        now,
-        now,
-      ],
-    },
+    buildCreditBalanceStatement({ input, entitlement, now, resetMonthlyUsed }),
   );
 
   await db.batch(statements, 'write');

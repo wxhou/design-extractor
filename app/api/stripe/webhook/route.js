@@ -6,6 +6,7 @@ import {
   getPlanForPrice,
   getStripeId,
   getSubscriptionPeriodEnd,
+  getSubscriptionPeriodStart,
   getSubscriptionPriceId,
 } from '@/src/stripe-billing.js';
 
@@ -47,8 +48,10 @@ async function syncSubscription(db, subscription, options = {}) {
     subscriptionId: getStripeId(subscription),
     plan,
     status: subscription.status,
+    periodStart: getSubscriptionPeriodStart(subscription),
     periodEnd: getSubscriptionPeriodEnd(subscription),
     canceled,
+    resetMonthlyUsed: options.resetMonthlyUsed || false,
   });
 }
 
@@ -63,7 +66,7 @@ async function handleCheckoutCompleted(stripe, db, checkoutSession) {
     };
   }
 
-  await syncSubscription(db, subscription);
+  await syncSubscription(db, subscription, { resetMonthlyUsed: true });
 }
 
 export async function POST(request) {

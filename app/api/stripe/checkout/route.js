@@ -1,7 +1,10 @@
 import Stripe from 'stripe';
 import { auth } from '../../../../auth.js';
 import { getDb } from '@/src/db.js';
-import { getOrCreateStripeCustomer } from '@/src/stripe-billing.js';
+import {
+  findBlockingCheckoutSubscription,
+  getOrCreateStripeCustomer,
+} from '@/src/stripe-billing.js';
 
 export const runtime = 'nodejs';
 
@@ -48,6 +51,13 @@ export async function POST(request) {
 
   try {
     const db = await getDb();
+    const blockingSubscription = await findBlockingCheckoutSubscription(db, user.id);
+    if (blockingSubscription) {
+      return Response.json({
+        error: 'You already have an active subscription. Use the Customer Portal to manage billing.',
+      }, { status: 409 });
+    }
+
     const stripe = getStripe();
     const customer = await getOrCreateStripeCustomer({ db, stripe, user });
     const origin = getOrigin(request);

@@ -4,6 +4,7 @@ import {
   getPlanForPrice,
   getPlanEntitlement,
   applySubscriptionEntitlement,
+  findBlockingCheckoutSubscription,
 } from '../../src/stripe-billing.js';
 
 test('getPlanForPrice maps configured Stripe prices to plans', () => {
@@ -41,6 +42,9 @@ test('getPlanEntitlement maps canceled subscriptions to free without pack change
 test('applySubscriptionEntitlement ON CONFLICT does not overwrite pack_balance', async () => {
   const batches = [];
   const db = {
+    async execute() {
+      return { rows: [] };
+    },
     async batch(statements) {
       batches.push(statements);
     },
@@ -69,4 +73,122 @@ test('applySubscriptionEntitlement ON CONFLICT does not overwrite pack_balance',
   assert.match(creditStmt.sql, /monthly_quota\s*=\s*excluded\.monthly_quota/i);
   assert.match(creditStmt.sql, /monthly_used\s*=\s*excluded\.monthly_used/i);
   assert.deepEqual(creditStmt.args, ['user-1', 500, 0, '2026-07-11T00:00:00.000Z', '2026-07-11T00:00:00.000Z']);
+});
+
+test('applySubscriptionEntitlement preserves monthly usage on status-only subscription updates', async () => {
+  const batches = [];
+  const db = {
+    async execute({ sql, args }) {
+      assert.match(sql, /FROM subscriptions/i);
+      assert.match(sql, /credit_balances/i);
+      assert.deepEqual(args, ['user-1']);
+      return {
+        rows: [{
+          plan: 'starter',
+          period_start: '2026-07-01T00:00:00.000Z',
+        }],
+      };
+    },
+    async batch(statements) {
+      batches.push(statements);
+    },
+  };
+
+  await applySubscriptionEntitlement(db, {
+    userId: 'user-1',
+    subscriptionId: 'sub_1',
+    plan: 'starter',
+    status: 'past_due',
+    periodStart: '2026-07-01T00:00:00.000Z',
+    periodEnd: '2026-08-01T00:00:00.000Z',
+    now: '2026-07-11T00:00:00.000Z',
+  });
+
+  const creditStmt = batches[0].find((statement) => /credit_balances/i.test(statement.sql));
+  assert.ok(creditStmt, 'expected credit_balances statement');
+  assert.doesNotMatch(creditStmt.sql, /monthly_used\s*=\s*excluded\.monthly_used/i);
+  assert.match(creditStmt.sql, /monthly_used\s*=\s*credit_balances\.monthly_used/i);
+});
+
+test('applySubscriptionEntitlement resets monthly usage when billing period advances', async () => {
+  const batches = [];
+  const db = {
+    async execute() {
+      return {
+        rows: [{
+          plan: 'starter',
+          period_start: '2026-07-01T00:00:00.000Z',
+        }],
+      };
+    },
+    async batch(statements) {
+      batches.push(statements);
+    },
+  };
+
+  await applySubscriptionEntitlement(db, {
+    userId: 'user-1',
+    subscriptionId: 'sub_1',
+    plan: 'starter',
+    status: 'active',
+    periodStart: '2026-08-01T00:00:00.000Z',
+    periodEnd: '2026-09-01T00:00:00.000Z',
+    now: '2026-08-01T00:00:00.000Z',
+  });
+
+  const creditStmt = batches[0].find((statement) => /credit_balances/i.test(statement.sql));
+  assert.match(creditStmt.sql, /monthly_used\s*=\s*excluded\.monthly_used/i);
+});
+
+test('applySubscriptionEntitlement resets monthly usage when plan changes', async () => {
+  const batches = [];
+  const db = {
+    async execute() {
+      return {
+        rows: [{
+          plan: 'starter',
+          period_start: '2026-07-01T00:00:00.000Z',
+        }],
+      };
+    },
+    async batch(statements) {
+      batches.push(statements);
+    },
+  };
+
+  await applySubscriptionEntitlement(db, {
+    userId: 'user-1',
+    subscriptionId: 'sub_1',
+    plan: 'pro',
+    status: 'active',
+    periodStart: '2026-07-01T00:00:00.000Z',
+    periodEnd: '2026-08-01T00:00:00.000Z',
+    now: '2026-07-11T00:00:00.000Z',
+  });
+
+  const creditStmt = batches[0].find((statement) => /credit_balances/i.test(statement.sql));
+  assert.match(creditStmt.sql, /monthly_used\s*=\s*excluded\.monthly_used/i);
+});
+
+test('findBlockingCheckoutSubscription returns active subscription that should use portal', async () => {
+  const db = {
+    async execute({ sql, args }) {
+      assert.match(sql, /FROM subscriptions/i);
+      assert.match(sql, /status IN \('active', 'trialing', 'past_due'\)/i);
+      assert.match(sql, /stripe_subscription_id IS NOT NULL/i);
+      assert.match(sql, /stripe_subscription_id <> ''/i);
+      assert.deepEqual(args, ['user-1']);
+      return {
+        rows: [{
+          stripe_subscription_id: 'sub_1',
+          status: 'active',
+        }],
+      };
+    },
+  };
+
+  assert.deepEqual(await findBlockingCheckoutSubscription(db, 'user-1'), {
+    stripe_subscription_id: 'sub_1',
+    status: 'active',
+  });
 });
