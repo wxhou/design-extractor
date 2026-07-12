@@ -241,15 +241,3 @@ function rgbToHex(r, g, b) {
   };
   return '#' + toHex(r) + toHex(g) + toHex(b);
 }
-
-/**
- * 格式化阴影为 CSS 字符串
- * @param {object} shadow - 阴影对象
- * @returns {string} CSS box-shadow 值
- */
-export function formatShadow(shadow) {
-  if (typeof shadow === 'string') {
-    return shadow;
-  }
-  return `${shadow.offsetX || 0}px ${shadow.offsetY || 0}px ${shadow.radius || 0}px ${shadow.spread || 0}px ${shadow.color || '#000'}`;
-}

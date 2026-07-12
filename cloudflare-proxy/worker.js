@@ -1,3 +1,5 @@
+// Placeholder for future url2design.com cutover — swap Host/redirect rewrites when DNS is live.
+const URL2DESIGN_HOST = 'url2design.com';
 const VERCEL_URL = 'design-extractor-five.vercel.app';
 
 export default {

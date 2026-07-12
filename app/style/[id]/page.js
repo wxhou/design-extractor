@@ -22,6 +22,8 @@ const T = {
   en: {
     // Nav
     styles: 'Styles',
+    apiCta: 'API for agents',
+    apiCtaLink: 'Get API keys →',
     // Section titles
     colorPalette: 'Color Palette',
     typography: 'Typography',
@@ -87,6 +89,8 @@ const T = {
   zh: {
     // Nav
     styles: '样式库',
+    apiCta: '在 agent 中调用 API',
+    apiCtaLink: '获取 API Key →',
     // Section titles
     colorPalette: '色彩',
     typography: '字体',
@@ -492,6 +496,11 @@ export default function StylePage() {
                 {card.url.replace(/^https?:\/\//, '')}
               </a>
             )}
+          </div>
+
+          <div className="detail-api-cta">
+            <span>{T[locale].apiCta}</span>
+            <Link href="/dashboard">{T[locale].apiCtaLink}</Link>
           </div>
 
           {/* Colors */}
@@ -1186,6 +1195,26 @@ export default function StylePage() {
           font-size: 13px;
         }
         .detail-header { margin-bottom: 36px; }
+        .detail-api-cta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 28px;
+          padding: 12px 16px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+          background: var(--bg-card);
+          font-size: 13px;
+          color: var(--text-dim);
+        }
+        .detail-api-cta a {
+          color: var(--accent);
+          font-weight: 600;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .detail-api-cta a:hover { text-decoration: underline; }
         .detail-title-row {
           display: flex;
           align-items: center;

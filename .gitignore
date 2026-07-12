@@ -62,6 +62,8 @@ blob-report/
 .vercel
 .worktrees
 .superpowers
+.superpowers/sdd/
+.cursor/
 
 # All dot-prefixed directories (catch-all for agent tooling, cache, etc.)
 .*/

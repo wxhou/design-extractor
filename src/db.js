@@ -17,16 +17,47 @@ const DB_PATH = isStandalone
   : path.join(_thisDir, '..', 'refero.db');
 
 const MIGRATIONS = [
+  'ALTER TABLE cards ADD COLUMN north_star TEXT',
+  'ALTER TABLE cards ADD COLUMN color_scheme TEXT',
+  'ALTER TABLE cards ADD COLUMN category TEXT',
+  'ALTER TABLE cards ADD COLUMN typography TEXT',
+  'ALTER TABLE cards ADD COLUMN type_scale TEXT',
+  'ALTER TABLE cards ADD COLUMN gradient TEXT',
   'ALTER TABLE cards ADD COLUMN spacing TEXT',
   'ALTER TABLE cards ADD COLUMN shadows TEXT',
   'ALTER TABLE cards ADD COLUMN border_radius TEXT',
-  'ALTER TABLE cards ADD COLUMN css_variables TEXT',
+'ALTER TABLE cards ADD COLUMN css_variables TEXT',
   'ALTER TABLE cards ADD COLUMN breakpoints TEXT',
   'ALTER TABLE cards ADD COLUMN spacing_base TEXT',
   'ALTER TABLE cards ADD COLUMN design_system TEXT',
   'ALTER TABLE cards ADD COLUMN dos TEXT',
   'ALTER TABLE cards ADD COLUMN donts TEXT',
+  'ALTER TABLE cards ADD COLUMN raw_data TEXT',
+  'ALTER TABLE cards ADD COLUMN color_philosophy TEXT',
+  'ALTER TABLE cards ADD COLUMN elevation_philosophy TEXT',
+  'ALTER TABLE cards ADD COLUMN animation_duration TEXT',
 ];
+
+let _migrationsPromise = null;
+
+async function ensureCardMigrations(db) {
+  if (!_migrationsPromise) {
+    _migrationsPromise = (async () => {
+      for (const sql of MIGRATIONS) {
+        try {
+          await db.execute(sql);
+        } catch (error) {
+          const message = String(error?.message || error);
+          // Duplicate column / already exists is expected on warm databases.
+          if (!/duplicate column|already exists/i.test(message)) {
+            console.warn('[db] migration skipped:', sql, message);
+          }
+        }
+      }
+    })();
+  }
+  await _migrationsPromise;
+}
 
 // wasm 文件位置：运行时动态检测
 const locateFile = file => {
@@ -54,6 +85,39 @@ function getTursoDb() {
     tursoClient = createClient({ url: httpsUrl, authToken });
   }
   return tursoClient;
+}
+
+function normalizeQuery(sql, args = []) {
+  if (typeof sql === 'object' && sql !== null) {
+    return {
+      sql: sql.sql,
+      args: sql.args || [],
+    };
+  }
+  return { sql, args };
+}
+
+function executeSqlJsStatement(db, sql, args = []) {
+  const stm = db.prepare(sql);
+  if (args.length > 0) stm.bind(args.map(String));
+  const columns = stm.getColumnNames();
+  const rows = [];
+  while (stm.step()) {
+    const values = stm.get();
+    // 转换为 {col: val} 格式，与 Turso 保持一致
+    const row = {};
+    columns.forEach((col, i) => { row[col] = values[i]; });
+    rows.push(row);
+  }
+  stm.free();
+  return {
+    rows,
+    rowsAffected: isWriteStatement(sql) ? db.getRowsModified() : 0,
+  };
+}
+
+function isWriteStatement(sql) {
+  return /^(INSERT|UPDATE|DELETE)/i.test(sql.trim());
 }
 
 async function getSqlDb() {
@@ -136,17 +200,26 @@ async function getSqlDb() {
 export async function getDb() {
   const turso = getTursoDb();
   if (turso) {
-    return {
+    const api = {
       async execute(sql, args = []) {
         // 兼容对象格式调用
-        if (typeof sql === 'object' && sql !== null) {
-          args = sql.args || [];
-          sql = sql.sql;
-        }
-        const result = await turso.execute({ sql, args });
-        return { rows: result.rows };
+        const query = normalizeQuery(sql, args);
+        const result = await turso.execute(query);
+        return { rows: result.rows, rowsAffected: Number(result.rowsAffected || 0) };
+      },
+      async batch(statements, mode = 'write') {
+        const results = await turso.batch(
+          statements.map(statement => normalizeQuery(statement)),
+          mode,
+        );
+        return results.map(result => ({
+          rows: result.rows,
+          rowsAffected: Number(result.rowsAffected || 0),
+        }));
       },
     };
+    await ensureCardMigrations(api);
+    return api;
   }
 
   // 本地 sql.js
@@ -154,27 +227,32 @@ export async function getDb() {
   return {
     async execute(sql, args = []) {
       // 兼容对象格式调用
-      if (typeof sql === 'object' && sql !== null) {
-        args = sql.args || [];
-        sql = sql.sql;
-      }
-      const stm = db.prepare(sql);
-      if (args.length > 0) stm.bind(args.map(String));
-      const columns = stm.getColumnNames();
-      const rows = [];
-      while (stm.step()) {
-        const values = stm.get();
-        // 转换为 {col: val} 格式，与 Turso 保持一致
-        const row = {};
-        columns.forEach((col, i) => { row[col] = values[i]; });
-        rows.push(row);
-      }
-      stm.free();
-      if (/^(INSERT|UPDATE|DELETE)/i.test(sql.trim())) {
+      const query = normalizeQuery(sql, args);
+      const result = executeSqlJsStatement(db, query.sql, query.args);
+      if (isWriteStatement(query.sql)) {
         const data = db.export();
         fs.writeFileSync(DB_PATH, Buffer.from(data));
       }
-      return { rows };
+      return result;
+    },
+    async batch(statements) {
+      const queries = statements.map(statement => normalizeQuery(statement));
+      const results = [];
+      db.run('BEGIN');
+      try {
+        for (const query of queries) {
+          results.push(executeSqlJsStatement(db, query.sql, query.args));
+        }
+        db.run('COMMIT');
+      } catch (error) {
+        db.run('ROLLBACK');
+        throw error;
+      }
+      if (queries.some(query => isWriteStatement(query.sql))) {
+        const data = db.export();
+        fs.writeFileSync(DB_PATH, Buffer.from(data));
+      }
+      return results;
     },
   };
 }

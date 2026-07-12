@@ -2,6 +2,9 @@
   "functions": {
     "app/api/extract/route.js": {
       "maxDuration": 60
+    },
+    "app/api/v1/extract/route.js": {
+      "maxDuration": 60
     }
   }
 }
