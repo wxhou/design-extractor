@@ -21,8 +21,8 @@ export async function GET(request, { params }) {
 
   const { id } = await params;
   const result = await db.execute({
-    sql: 'SELECT * FROM cards WHERE id = ?',
-    args: [id],
+    sql: 'SELECT * FROM cards WHERE id = ? AND user_id = ?',
+    args: [id, auth.userId],
   });
   await markApiKeyUsed(db, auth.keyId);
 

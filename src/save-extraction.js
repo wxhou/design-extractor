@@ -67,8 +67,8 @@ export async function saveExtraction(db, normalized, result, options = {}) {
   const now = options.now || new Date().toISOString();
 
   await db.execute({
-    sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, spacing, shadows, border_radius, raw_data, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, spacing, shadows, border_radius, raw_data, created_at, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             url = excluded.url,
@@ -86,7 +86,8 @@ export async function saveExtraction(db, normalized, result, options = {}) {
             shadows = excluded.shadows,
             border_radius = excluded.border_radius,
             raw_data = excluded.raw_data,
-            created_at = excluded.created_at`,
+            created_at = excluded.created_at,
+            user_id = excluded.user_id`,
     args: [
       cardId,
       result.siteName,
@@ -106,6 +107,7 @@ export async function saveExtraction(db, normalized, result, options = {}) {
       JSON.stringify(result.borderRadius || {}),
       JSON.stringify({ tokensJson, variablesCss, themeCss, animations: result.animations }),
       now,
+      options.userId || null,
     ],
   });
 

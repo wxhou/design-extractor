@@ -36,6 +36,7 @@ const MIGRATIONS = [
   'ALTER TABLE cards ADD COLUMN color_philosophy TEXT',
   'ALTER TABLE cards ADD COLUMN elevation_philosophy TEXT',
   'ALTER TABLE cards ADD COLUMN animation_duration TEXT',
+  'ALTER TABLE cards ADD COLUMN user_id TEXT',
 ];
 
 let _migrationsPromise = null;

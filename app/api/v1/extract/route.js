@@ -115,7 +115,7 @@ export async function POST(request) {
       throw new Error(result.error || 'Extraction failed');
     }
 
-    const data = (await saveExtraction(db, normalized, result)).data;
+    const data = (await saveExtraction(db, normalized, result, { userId: auth.userId })).data;
     const now = new Date().toISOString();
     const latencyMs = Date.now() - started;
     const nextBalance = await consumeCredit(db, auth, now, normalized, latencyMs);
