@@ -51,3 +51,9 @@ AGENTS.md
 # Testing
 coverage/
 .vercel
+
+# Superpowers SDD scratch (local agent reports)
+.superpowers/sdd/
+
+# Cursor local project/skills copies
+.cursor/

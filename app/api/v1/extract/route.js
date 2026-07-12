@@ -94,26 +94,28 @@ export async function POST(request) {
 
   try {
     const existing = await findExistingCard(db, normalized.normalized);
-    const data = existing
-      ? {
-          cardId: existing.id,
-          isDuplicate: true,
-          message: 'This site has already been extracted',
-          siteName: existing.name,
-        }
-      : await (async () => {
-          const result = await extractDesignTokens(normalized.full, {
-            useAI: true,
-            captureScreenshot: true,
-          });
+    if (existing) {
+      const now = new Date().toISOString();
+      await markApiKeyUsed(db, auth.keyId, now);
+      await recordUsage(db, auth, normalized, 'duplicate', 0, Date.now() - started, now);
+      return jsonOk({
+        cardId: existing.id,
+        isDuplicate: true,
+        message: 'This site has already been extracted',
+        siteName: existing.name,
+      }, { remaining: auth.remaining });
+    }
 
-          if (!result.success) {
-            throw new Error(result.error || 'Extraction failed');
-          }
+    const result = await extractDesignTokens(normalized.full, {
+      useAI: true,
+      captureScreenshot: true,
+    });
 
-          return (await saveExtraction(db, normalized, result)).data;
-        })();
+    if (!result.success) {
+      throw new Error(result.error || 'Extraction failed');
+    }
 
+    const data = (await saveExtraction(db, normalized, result)).data;
     const now = new Date().toISOString();
     const latencyMs = Date.now() - started;
     const nextBalance = await consumeCredit(db, auth, now, normalized, latencyMs);

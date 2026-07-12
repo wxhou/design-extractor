@@ -17,10 +17,41 @@ const DB_PATH = isStandalone
   : path.join(_thisDir, '..', 'refero.db');
 
 const MIGRATIONS = [
+  'ALTER TABLE cards ADD COLUMN north_star TEXT',
+  'ALTER TABLE cards ADD COLUMN color_scheme TEXT',
+  'ALTER TABLE cards ADD COLUMN category TEXT',
+  'ALTER TABLE cards ADD COLUMN typography TEXT',
+  'ALTER TABLE cards ADD COLUMN type_scale TEXT',
+  'ALTER TABLE cards ADD COLUMN gradient TEXT',
   'ALTER TABLE cards ADD COLUMN spacing TEXT',
   'ALTER TABLE cards ADD COLUMN shadows TEXT',
   'ALTER TABLE cards ADD COLUMN border_radius TEXT',
+  'ALTER TABLE cards ADD COLUMN raw_data TEXT',
+  'ALTER TABLE cards ADD COLUMN color_philosophy TEXT',
+  'ALTER TABLE cards ADD COLUMN elevation_philosophy TEXT',
+  'ALTER TABLE cards ADD COLUMN animation_duration TEXT',
 ];
+
+let _migrationsPromise = null;
+
+async function ensureCardMigrations(db) {
+  if (!_migrationsPromise) {
+    _migrationsPromise = (async () => {
+      for (const sql of MIGRATIONS) {
+        try {
+          await db.execute(sql);
+        } catch (error) {
+          const message = String(error?.message || error);
+          // Duplicate column / already exists is expected on warm databases.
+          if (!/duplicate column|already exists/i.test(message)) {
+            console.warn('[db] migration skipped:', sql, message);
+          }
+        }
+      }
+    })();
+  }
+  await _migrationsPromise;
+}
 
 // wasm 文件位置：运行时动态检测
 const locateFile = file => {
@@ -132,7 +163,7 @@ async function getSqlDb() {
 export async function getDb() {
   const turso = getTursoDb();
   if (turso) {
-    return {
+    const api = {
       async execute(sql, args = []) {
         // 兼容对象格式调用
         const query = normalizeQuery(sql, args);
@@ -150,6 +181,8 @@ export async function getDb() {
         }));
       },
     };
+    await ensureCardMigrations(api);
+    return api;
   }
 
   // 本地 sql.js

@@ -8,13 +8,15 @@
     "build": "next build",
     "start": "next start",
     "cli": "node cli.js",
-    "migrate:auth": "node scripts/migrate-auth-tables.mjs"
+    "migrate:auth": "node scripts/migrate-auth-tables.mjs",
+    "playwright:install": "playwright install chromium"
   },
   "bin": {
     "design-extractor": "./cli.js"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",
+    "@phosphor-icons/react": "^2.1.10",
     "better-sqlite3": "^11.7.0",
     "cheerio": "^1.2.0",
     "chromium-bidi": "^15.0.0",

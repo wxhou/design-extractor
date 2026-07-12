@@ -5,7 +5,7 @@
  * 从渲染后的 DOM 提取设计 tokens，配合 MiniMax AI 生成语义化命名
  */
 
-import { chromium } from 'playwright-core';
+import { chromium } from 'playwright';
 import OpenAI from 'openai';
 
 // ============================================================
@@ -438,11 +438,50 @@ export function clusterColors(colors) {
 // 3. 语义角色推断模块
 // ============================================================
 
+const CONTEXT_ALIASES = {
+  buttons: 'button',
+  headings: 'heading',
+  links: 'link',
+  cards: 'card',
+  borders: 'border',
+  backgrounds: 'background',
+  inputs: 'input',
+  badges: 'badge',
+  heroes: 'hero',
+};
+
+/**
+ * Normalize plural extractor contexts (buttons → button).
+ */
+export function normalizeContexts(contexts = []) {
+  return [...new Set(
+    contexts
+      .filter(Boolean)
+      .map((ctx) => CONTEXT_ALIASES[ctx] || ctx)
+  )];
+}
+
+/**
+ * Build collision-free YAML / CSS token keys.
+ */
+export function uniqueTokenKey(name, used) {
+  const base = toCssName(name || 'token') || 'token';
+  let key = base;
+  let i = 2;
+  while (used.has(key)) {
+    key = `${base}-${i}`;
+    i += 1;
+  }
+  used.add(key);
+  return key;
+}
+
 /**
  * 根据上下文推断颜色分组
  */
 export function inferColorGroup(contexts, hex) {
-  if (!contexts || contexts.length === 0) return 'neutral';
+  const ctx = normalizeContexts(contexts);
+  if (ctx.length === 0) return 'neutral';
 
   const hsl = getHslValues(hex);
 
@@ -452,14 +491,14 @@ export function inferColorGroup(contexts, hex) {
   }
 
   // 按钮中出现
-  if (contexts.includes('button')) {
-    if (hsl.s > 20 && (hsl.l < 70 || hsl.l > 85)) {
+  if (ctx.includes('button')) {
+    if (hsl.s > 35 && hsl.l > 20 && hsl.l < 75) {
       return 'brand';
     }
   }
 
   // CTA 按钮
-  if (contexts.includes('nav') && contexts.includes('button')) {
+  if (ctx.includes('nav') && ctx.includes('button') && hsl.s > 35) {
     return 'brand';
   }
 
@@ -514,33 +553,120 @@ export function inferColorName(hex, contexts) {
  * 生成颜色描述
  */
 export function generateColorRole(color, contexts) {
-  if (!contexts || contexts.length === 0) return 'Color';
+  const ctx = normalizeContexts(contexts);
+  if (ctx.length === 0) return 'Color';
 
-  const primaryContext = contexts[0] || 'element';
+  const primaryContext = ctx[0] || 'element';
 
-  if (contexts.includes('button') && contexts.includes('nav')) {
-    return `Primary action color — used for CTA buttons and navigation`;
+  if (ctx.includes('button') && ctx.includes('nav')) {
+    return 'Primary action color — used for CTA buttons and navigation';
   }
-  if (contexts.includes('button')) {
-    return `Button color — used for interactive elements`;
+  if (ctx.includes('button')) {
+    return 'Button color — used for interactive elements';
   }
-  if (contexts.includes('heading')) {
-    return `Heading color — used for titles and emphasis`;
+  if (ctx.includes('heading')) {
+    return 'Heading color — used for titles and emphasis';
   }
-  if (contexts.includes('body')) {
-    return `Body text color — used for paragraph content`;
+  if (ctx.includes('body')) {
+    return 'Body text color — used for paragraph content';
   }
-  if (contexts.includes('link')) {
-    return `Link color — used for hyperlinks`;
+  if (ctx.includes('link')) {
+    return 'Link color — used for hyperlinks';
   }
-  if (contexts.includes('card')) {
-    return `Card color — used for surface containers`;
+  if (ctx.includes('card')) {
+    return 'Card color — used for surface containers';
   }
-  if (contexts.includes('border')) {
-    return `Border color — used for dividers and outlines`;
+  if (ctx.includes('border')) {
+    return 'Border color — used for dividers and outlines';
+  }
+  if (ctx.includes('background')) {
+    return 'Background color — used for page or section surfaces';
   }
 
   return `${primaryContext.charAt(0).toUpperCase() + primaryContext.slice(1)} color`;
+}
+
+/**
+ * Attach agent-facing semantic roles (text / background / primary / …)
+ * and unique semanticKey values for YAML front matter.
+ */
+export function assignColorSemantics(colors = []) {
+  const ROLE_PRIORITY = {
+    primary: 0,
+    accent: 1,
+    background: 2,
+    surface: 3,
+    text: 4,
+    border: 5,
+    neutral: 6,
+  };
+
+  const annotated = colors.map((color) => {
+    const ctx = normalizeContexts(color.contexts);
+    const props = color.properties || [];
+    const hsl = getHslValues(color.hex) || { h: 0, s: 0, l: 50 };
+    const isTextProp = props.includes('color');
+    const isBgProp = props.includes('backgroundColor');
+    const isBorderProp = props.some((p) => String(p).startsWith('border'));
+
+    let semantic = 'neutral';
+    const vivid = hsl.s >= 35 && hsl.l > 18 && hsl.l < 78;
+    if (
+      (color.group === 'brand' && vivid) ||
+      (ctx.includes('button') && ctx.includes('nav') && vivid)
+    ) {
+      semantic = 'primary';
+    } else if (
+      (color.group === 'accent' && vivid) ||
+      (vivid && hsl.s > 55 && ctx.includes('button'))
+    ) {
+      semantic = 'accent';
+    } else if (isBgProp && (ctx.includes('background') || hsl.l <= 18 || hsl.l >= 92)) {
+      semantic = 'background';
+    } else if (isBgProp && (ctx.includes('card') || ctx.includes('input'))) {
+      semantic = 'surface';
+    } else if (isBorderProp && !isTextProp) {
+      semantic = 'border';
+    } else if (isTextProp || ctx.includes('heading') || ctx.includes('link') || ctx.includes('body')) {
+      semantic = 'text';
+    } else if (isBgProp) {
+      semantic = 'surface';
+    }
+
+    return {
+      ...color,
+      contexts: ctx,
+      semantic,
+    };
+  });
+
+  const byRole = new Map();
+  for (const color of annotated) {
+    if (!byRole.has(color.semantic)) byRole.set(color.semantic, []);
+    byRole.get(color.semantic).push(color);
+  }
+
+  const keyByHex = new Map();
+  for (const [role, list] of byRole.entries()) {
+    list.sort((a, b) => b.frequency - a.frequency);
+    list.forEach((color, index) => {
+      const key = index === 0 ? role : `${role}-${index + 1}`;
+      keyByHex.set(color.hex.toLowerCase(), key);
+    });
+  }
+
+  return annotated
+    .slice()
+    .sort((a, b) => {
+      const pa = ROLE_PRIORITY[a.semantic] ?? 9;
+      const pb = ROLE_PRIORITY[b.semantic] ?? 9;
+      if (pa !== pb) return pa - pb;
+      return b.frequency - a.frequency;
+    })
+    .map((color) => ({
+      ...color,
+      semanticKey: keyByHex.get(color.hex.toLowerCase()) || uniqueTokenKey(color.name || color.hex, new Set()),
+    }));
 }
 
 // ============================================================
@@ -868,6 +994,16 @@ export async function extractTypeScale(page) {
 async function extractSpacing(page) {
   const spacings = await page.evaluate(() => {
     const values = new Map();
+    const trackValue = (valuesMap, value, context) => {
+      if (!valuesMap.has(value)) {
+        valuesMap.set(value, { count: 0, contexts: [] });
+      }
+      const entry = valuesMap.get(value);
+      entry.count++;
+      if (!entry.contexts.includes(context)) {
+        entry.contexts.push(context);
+      }
+    };
 
     document.querySelectorAll('div, section, article, aside, header, footer, nav, main').forEach(el => {
       const style = window.getComputedStyle(el);
@@ -912,6 +1048,31 @@ async function extractSpacing(page) {
 async function extractShadows(page) {
   const shadows = await page.evaluate(() => {
     const values = new Map();
+    const trackValue = (valuesMap, value, context) => {
+      if (!valuesMap.has(value)) {
+        valuesMap.set(value, { count: 0, contexts: [] });
+      }
+      const entry = valuesMap.get(value);
+      entry.count++;
+      if (!entry.contexts.includes(context)) {
+        entry.contexts.push(context);
+      }
+    };
+    const getElementContext = (el) => {
+      const tag = el.tagName?.toLowerCase() || '';
+      const role = el.getAttribute('role') || '';
+      const type = el.getAttribute('type') || '';
+      const className = el.className || '';
+      if (tag === 'button' || role === 'button') return 'button';
+      if (tag === 'input') return type ? `input-${type}` : 'input';
+      if (tag === 'img' || tag === 'svg') return 'image';
+      if (tag === 'a') return 'link';
+      if (tag.match(/^h[1-6]$/)) return 'heading';
+      if (typeof className === 'string' && className.match(/card|modal|dropdown|menu|nav/i)) {
+        return className.split(' ')[0];
+      }
+      return tag;
+    };
 
     document.querySelectorAll('div, section, article, aside, button, input, img').forEach(el => {
       const style = window.getComputedStyle(el);
@@ -955,6 +1116,16 @@ async function extractAnimations(page) {
     const animations = new Map();
     const transforms = new Map();
     const easings = new Map();
+    const trackValue = (valuesMap, value, context) => {
+      if (!valuesMap.has(value)) {
+        valuesMap.set(value, { count: 0, contexts: [] });
+      }
+      const entry = valuesMap.get(value);
+      entry.count++;
+      if (!entry.contexts.includes(context)) {
+        entry.contexts.push(context);
+      }
+    };
 
     // 选择器：可能包含动效的元素
     const selectors = 'div, button, a, input, img, nav, header, footer, [class*="card"], [class*="modal"], [class*="dropdown"], [class*="menu"]';
@@ -963,63 +1134,35 @@ async function extractAnimations(page) {
     elements.forEach(el => {
       const style = window.getComputedStyle(el);
 
-      // 提取 transition
-      const transition = style.transition;
-      if (transition && transition !== 'all 0s ease 0s' && transition !== 'none') {
-        // 解析 transition 属性
-        const parts = transition.split(/\s+/);
-        let duration = '0s', delay = '0s', timing = 'ease', property = 'all';
+      // Prefer longhand so cubic-bezier(...) is not truncated by whitespace splits
+      const transitionDuration = (style.transitionDuration || '').split(',')[0].trim();
+      const transitionTiming = (style.transitionTimingFunction || '').split(',')[0].trim();
+      const transitionProperty = (style.transitionProperty || '').split(',')[0].trim();
 
-        // 解析各个部分
-        for (let i = 0; i < parts.length; i++) {
-          const p = parts[i];
-          if (p.endsWith('ms') || p.endsWith('s')) {
-            if (!duration || duration === '0s') {
-              duration = p;
-            } else if (!delay || delay === '0s') {
-              delay = p;
-            }
-          } else if (p.includes('ease') || p === 'linear' || p === 'step-start' || p === 'step-end' || p.includes('cubic-bezier') || p.includes('(')) {
-            timing = p;
-          } else if (p !== 'ease' && p !== 'linear' && p !== 'all' && !p.includes('ms') && !p.includes('s')) {
-            property = p;
-          }
-        }
-
-        if (duration !== '0s') {
-          trackValue(transitions, duration, `duration:${property}`);
-        }
-        if (timing !== 'ease') {
-          trackValue(easings, timing, 'timing-function');
-        }
+      if (transitionDuration && transitionDuration !== '0s' && transitionDuration !== '0ms') {
+        trackValue(transitions, transitionDuration, `duration:${transitionProperty || 'all'}`);
+      }
+      if (
+        transitionTiming &&
+        transitionTiming !== 'ease' &&
+        transitionTiming !== 'ease 0s' &&
+        !/^ease(\s|$)/.test(transitionTiming)
+      ) {
+        trackValue(easings, transitionTiming, 'timing-function');
       }
 
       // 提取 animation
       const animation = style.animation;
       if (animation && animation !== 'none' && animation !== 'none 0s ease 0s') {
-        const parts = animation.split(/\s+/);
-        let name = '', duration = '0s', timing = 'ease', delay = '0s', count = '1', dir = 'normal', fill = 'none';
+        const animDuration = (style.animationDuration || '').split(',')[0].trim();
+        const animTiming = (style.animationTimingFunction || '').split(',')[0].trim();
+        const animName = (style.animationName || '').split(',')[0].trim();
 
-        for (let i = 0; i < parts.length; i++) {
-          const p = parts[i];
-          if (p.endsWith('ms') || p.endsWith('s')) {
-            if (!duration || duration === '0s') duration = p;
-            else if (!delay || delay === '0s') delay = p;
-          } else if (['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end'].includes(p)) {
-            timing = p;
-          } else if (['infinite', '1', '2', '3', '4', '5'].includes(p)) {
-            count = p;
-          } else if (['normal', 'reverse', 'alternate', 'alternate-reverse'].includes(p)) {
-            dir = p;
-          } else if (['none', 'forwards', 'backwards', 'both'].includes(p)) {
-            fill = p;
-          } else if (!['animation'].includes(p) && !p.includes('ms') && !p.includes('s') && !p.includes('(')) {
-            name = p;
-          }
+        if (animName && animName !== 'none') {
+          trackValue(animations, animName, `duration:${animDuration || '0s'}`);
         }
-
-        if (name) {
-          trackValue(animations, name, `duration:${duration}`);
+        if (animTiming && animTiming !== 'ease') {
+          trackValue(easings, animTiming, 'animation-timing');
         }
       }
 
@@ -1074,6 +1217,31 @@ async function extractAnimations(page) {
 async function extractBorderRadius(page) {
   const radii = await page.evaluate(() => {
     const values = new Map();
+    const trackValue = (valuesMap, value, context) => {
+      if (!valuesMap.has(value)) {
+        valuesMap.set(value, { count: 0, contexts: [] });
+      }
+      const entry = valuesMap.get(value);
+      entry.count++;
+      if (!entry.contexts.includes(context)) {
+        entry.contexts.push(context);
+      }
+    };
+    const getElementContext = (el) => {
+      const tag = el.tagName?.toLowerCase() || '';
+      const role = el.getAttribute('role') || '';
+      const type = el.getAttribute('type') || '';
+      const className = el.className || '';
+      if (tag === 'button' || role === 'button') return 'button';
+      if (tag === 'input') return type ? `input-${type}` : 'input';
+      if (tag === 'img' || tag === 'svg') return 'image';
+      if (tag === 'a') return 'link';
+      if (tag.match(/^h[1-6]$/)) return 'heading';
+      if (typeof className === 'string' && className.match(/card|modal|dropdown|menu|nav/i)) {
+        return className.split(' ')[0];
+      }
+      return tag;
+    };
 
     document.querySelectorAll('div, button, input, img, a, span, p').forEach(el => {
       const style = window.getComputedStyle(el);
@@ -1797,54 +1965,69 @@ export function generateThemeCss(data) {
 // ============================================================
 
 /**
- * 生成 DESIGN.md 格式的输出
+ * 生成 stitch 级 DESIGN.md（YAML tokens + agent 可读叙事）
  */
 export function generateDesignMd(data) {
-  const { siteName, colors, fonts, gradients, typeScale, northStar, url } = data;
+  const {
+    siteName,
+    fonts = [],
+    typeScale,
+    northStar,
+    url,
+    colorScheme = 'unknown',
+  } = data;
+
+  const colors = (data.colors || []).some((c) => c.semanticKey)
+    ? data.colors
+    : assignColorSemantics(data.colors || []);
+
+  const escapeYaml = (value) => String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const pxOf = (value) => {
+    const n = parseFloat(String(value).replace(/px$/i, ''));
+    return Number.isFinite(n) ? n : value;
+  };
 
   let md = `---
-name: ${siteName}
-description: Design tokens extracted from ${url}
-north_star: "${northStar || ''}"
+version: "1.0"
+name: "${escapeYaml(siteName)}"
+description: "Design tokens extracted from ${escapeYaml(url)}"
+north_star: "${escapeYaml(northStar || '')}"
+color_scheme: "${escapeYaml(colorScheme)}"
 `;
 
-  // Colors
-  const brandColors = colors.filter(c => c.group === 'brand');
-  const accentColors = colors.filter(c => c.group === 'accent');
-  const neutralColors = colors.filter(c => c.group === 'neutral');
-
   md += `\ncolors:\n`;
-  for (const c of colors.slice(0, 10)) {
-    md += `  ${c.name}: "${c.hex}"\n`;
+  for (const c of colors.slice(0, 12)) {
+    const key = c.semanticKey || uniqueTokenKey(c.name || c.hex, new Set());
+    md += `  ${key}: "${c.hex}"\n`;
   }
 
-  // Fonts
   md += `\ntypography:\n`;
-  for (const f of fonts.slice(0, 3)) {
-    md += `  - family: ${f.fontFamily}\n`;
-    md += `    weights: [${f.weights.join(', ')}]\n`;
-    md += `    source: ${f.source}\n`;
+  const typeSteps = (typeScale?.steps || []).slice(0, 8);
+  if (typeSteps.length > 0) {
+    typeSteps.forEach((step, i) => {
+      const font = fonts[i === 0 ? 0 : Math.min(1, fonts.length - 1)] || fonts[0];
+      md += `  type-${i + 1}:\n`;
+      md += `    fontFamily: "${escapeYaml(font?.fontFamily || 'System')}"\n`;
+      md += `    fontSize: "${escapeYaml(step.size)}"\n`;
+      if (step.fontWeight) md += `    fontWeight: "${escapeYaml(step.fontWeight)}"\n`;
+      if (step.lineHeight) md += `    lineHeight: "${escapeYaml(step.lineHeight)}"\n`;
+      if (step.letterSpacing) md += `    letterSpacing: "${escapeYaml(step.letterSpacing)}"\n`;
+    });
+  } else {
+    fonts.slice(0, 3).forEach((f, i) => {
+      md += `  type-${i + 1}:\n`;
+      md += `    fontFamily: "${escapeYaml(f.fontFamily)}"\n`;
+      md += `    fontWeight: "${escapeYaml((f.weights || ['400']).join(' '))}"\n`;
+    });
   }
 
-  // Type scale
-  if (typeScale && typeScale.steps) {
-    md += `\ntype_scale:\n`;
-    md += `  base: ${typeScale.base}\n`;
-    for (const step of typeScale.steps.slice(0, 6)) {
-      md += `  - ${step.name}: ${step.size}\n`;
+  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
+    md += `\nrounded:\n`;
+    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
+      md += `  ${name}: "${value}"\n`;
     }
   }
 
-  // Gradients
-  if (gradients && gradients.length > 0) {
-    md += `\ngradients:\n`;
-    for (const g of gradients.slice(0, 5)) {
-      md += `  - type: ${g.type}\n`;
-      md += `    colors: [${g.colors.join(', ')}]\n`;
-    }
-  }
-
-  // Spacing
   if (data.spacing?.tokens && Object.keys(data.spacing.tokens).length > 0) {
     md += `\nspacing:\n`;
     for (const [name, value] of Object.entries(data.spacing.tokens)) {
@@ -1852,23 +2035,13 @@ north_star: "${northStar || ''}"
     }
   }
 
-  // Shadows
   if (data.shadows?.tokens && Object.keys(data.shadows.tokens).length > 0) {
     md += `\nshadows:\n`;
     for (const [name, value] of Object.entries(data.shadows.tokens)) {
-      md += `  ${name}: "${value}"\n`;
+      md += `  ${name}: "${escapeYaml(value)}"\n`;
     }
   }
 
-  // Border Radius
-  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
-    md += `\nborder_radius:\n`;
-    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
-      md += `  ${name}: "${value}"\n`;
-    }
-  }
-
-  // Animations
   if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
     md += `\nanimation_duration:\n`;
     for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
@@ -1878,90 +2051,192 @@ north_star: "${northStar || ''}"
 
   if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
     md += `\nanimation_easing:\n`;
-    for (const [name] of Object.entries(data.animations.easings)) {
-      md += `  ${toCssName(name)}: "${name}"\n`;
+    const used = new Set();
+    for (const [easing] of Object.entries(data.animations.easings)) {
+      const key = uniqueTokenKey(easing.startsWith('cubic-bezier') ? 'ease-custom' : easing, used);
+      md += `  ${key}: "${escapeYaml(easing)}"\n`;
     }
   }
 
-  // Prose
+  const fontNames = fonts.map((f) => f.fontFamily).filter(Boolean);
+  const primaryColors = colors.filter((c) => c.semantic === 'primary' || c.group === 'brand');
+  const accentColors = colors.filter((c) => c.semantic === 'accent' || c.group === 'accent');
+  const textColors = colors.filter((c) => c.semantic === 'text');
+  const surfaceColors = colors.filter((c) => c.semantic === 'background' || c.semantic === 'surface');
+  const borderColors = colors.filter((c) => c.semantic === 'border');
+
+  const signature = [];
+  if (fontNames.length) signature.push(`${fontNames.join(' + ')} typography`);
+  if (primaryColors[0]) signature.push(`primary ${primaryColors[0].hex}`);
+  if (data.borderRadius?.tokens) {
+    const radii = Object.values(data.borderRadius.tokens).slice(0, 3).join('/');
+    signature.push(`radius ${radii}`);
+  }
+
   md += `\n---\n\n`;
-  md += `## ${siteName} Design System\n\n`;
-
-  if (northStar) {
-    md += `**Design Philosophy**: ${northStar}\n\n`;
+  md += `## Overview\n\n`;
+  md += northStar
+    ? `${northStar}\n\n`
+    : `Design tokens extracted from frequency analysis of the live rendered page at ${url}.\n\n`;
+  md += `**Signature traits:**\n`;
+  if (signature.length) {
+    for (const trait of signature) md += `- ${trait}\n`;
+  } else {
+    md += `- Evidence was insufficient to extract distinctive signature traits for this system.\n`;
   }
+  md += `\n`;
 
-  if (brandColors.length > 0) {
-    md += `### Brand Colors\n\n`;
-    for (const c of brandColors) {
-      md += `- **${c.name}** (${c.hex}): ${c.role}\n`;
+  md += `## Colors\n\n`;
+  md += `The palette uses ${colors.length} validated color tokens`;
+  md += colorScheme && colorScheme !== 'unknown' ? ` with a ${colorScheme} theme profile` : '';
+  md += `. Semantic roles stay attached to observed usage so generation agents can choose accents without inventing new color meaning.\n\n`;
+
+  const themeLabel = colorScheme === 'light' ? 'Light Theme' : colorScheme === 'dark' ? 'Dark Theme' : 'Observed Theme';
+  md += `### ${themeLabel}\n\n`;
+
+  if (primaryColors.length || accentColors.length) {
+    md += `### Primary Brand\n`;
+    for (const c of [...primaryColors, ...accentColors].slice(0, 6)) {
+      md += `- **${c.semanticKey || c.name}** (${c.hex}): Frequency rank evidence (${c.frequency} hits). Role: ${c.semantic}. ${c.role || ''}\n`;
     }
     md += `\n`;
   }
 
-  if (accentColors.length > 0) {
-    md += `### Accent Colors\n\n`;
-    for (const c of accentColors) {
-      md += `- **${c.name}** (${c.hex}): ${c.role}\n`;
+  if (textColors.length) {
+    md += `### Text Scale\n`;
+    for (const c of textColors.slice(0, 10)) {
+      md += `- **${c.semanticKey || c.name}** (${c.hex}): repeated text-role usage (${c.frequency} hits). Role: text. ${c.role || ''}\n`;
     }
     md += `\n`;
   }
 
-  md += `### Typography\n\n`;
-  md += `Primary font: **${fonts[0]?.fontFamily || 'System'}**\n`;
-  md += `Weights: ${fonts[0]?.weights.join(', ') || '400'}\n`;
+  if (surfaceColors.length) {
+    md += `### Surfaces\n`;
+    for (const c of surfaceColors.slice(0, 8)) {
+      md += `- **${c.semanticKey || c.name}** (${c.hex}): surface/background usage (${c.frequency} hits). Role: ${c.semantic}.\n`;
+    }
+    md += `\n`;
+  }
 
-  // Spacing Section
+  if (borderColors.length) {
+    md += `### Borders\n`;
+    for (const c of borderColors.slice(0, 6)) {
+      md += `- **${c.semanticKey || c.name}** (${c.hex}): border usage (${c.frequency} hits).\n`;
+    }
+    md += `\n`;
+  }
+
+  md += `## Typography\n\n`;
+  md += fontNames.length
+    ? `Typography uses ${fontNames.join(', ')} across extracted hierarchy roles. Keep hierarchy mapped to these token rows before adding decorative type styles.\n\n`
+    : `Typography tokens were sparse; prefer system UI fonts until stronger evidence appears.\n\n`;
+
+  if (typeSteps.length) {
+    const sizes = typeSteps.map((s) => s.px || pxOf(s.size)).filter((n) => typeof n === 'number');
+    if (sizes.length >= 2) {
+      md += `Sizes range from ${Math.min(...sizes)}px to ${Math.max(...sizes)}px.\n\n`;
+    }
+    md += `### Type Scale Evidence\n`;
+    md += `| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |\n`;
+    md += `|------|------|------|--------|-------------|----------------|-------|\n`;
+    typeSteps.forEach((step, i) => {
+      const font = fonts[Math.min(i, Math.max(fonts.length - 1, 0))] || fonts[0];
+      md += `| ${step.name || `type-${i + 1}`} | ${font?.fontFamily || 'System'} | ${step.size} | ${step.fontWeight || '400'} | ${step.lineHeight || 'normal'} | ${step.letterSpacing || 'normal'} | Extracted token |\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `## Layout\n\n`;
+  md += `Layout rhythm is inferred from spacing tokens and observed component density.\n\n`;
   if (data.spacing?.tokens && Object.keys(data.spacing.tokens).length > 0) {
-    md += `\n### Spacing\n\n`;
-    for (const [name, value] of Object.entries(data.spacing.tokens)) {
-      md += `- **${name}** ${value}\n`;
+    md += `### Spacing System\n`;
+    md += `| Token | Value | Px | Notes |\n|------|-------|----|-------|\n`;
+    const spacingEntries = Object.entries(data.spacing.tokens)
+      .map(([name, value]) => [name, value, pxOf(value)])
+      .sort((a, b) => (typeof a[2] === 'number' && typeof b[2] === 'number' ? a[2] - b[2] : 0));
+    for (const [name, value, px] of spacingEntries) {
+      md += `| ${name} | ${value} | ${px} | Extracted spacing token |\n`;
     }
     md += `\n`;
   }
 
-  // Shadows Section
+  md += `## Elevation & Depth\n\n`;
   if (data.shadows?.tokens && Object.keys(data.shadows.tokens).length > 0) {
-    md += `### Shadows\n\n`;
+    md += `Keep depth claims tied to validated shadow evidence below.\n\n`;
+    md += `### Shadow Evidence\n`;
+    md += `| Shadow Token | Details |\n|--------------|---------|\n`;
     for (const [name, value] of Object.entries(data.shadows.tokens)) {
-      md += `- **${name}** ${value}\n`;
+      md += `| ${name} | ${value} |\n`;
     }
     md += `\n`;
+  } else {
+    md += `Keep depth flat unless validated shadow evidence appears. Do not invent shadows beyond this evidence boundary.\n\n`;
+    md += `### Shadow Evidence\n`;
+    md += `| Shadow Token | Layers | Details |\n|--------------|--------|---------|\n`;
+    md += `| n/a | 0 | No validated shadow payload |\n\n`;
   }
 
-  // Border Radius Section
-  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
-    md += `### Border Radius\n\n`;
-    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
-      md += `- **${name}** ${value}\n`;
-    }
-    md += `\n`;
-  }
-
-  // Animation Duration Section
-  if (data.animations?.durationTokens?.tokens && Object.keys(data.animations.durationTokens.tokens).length > 0) {
-    md += `### Animation Timing\n\n`;
+  if (data.animations?.durationTokens?.tokens) {
+    md += `### Motion Timing\n`;
     md += `| Token | Value | Description |\n|-------|-------|-------------|\n`;
     const nameDescMap = {
       'duration-fast': 'Quick feedback',
       'duration-base': 'Default transition',
-      'duration-slow': 'Page transitions'
+      'duration-slow': 'Page transitions',
     };
     for (const [name, value] of Object.entries(data.animations.durationTokens.tokens)) {
-      const desc = nameDescMap[name] || '';
-      md += `| --${name} | ${value} | ${desc} |\n`;
+      md += `| --${name} | ${value} | ${nameDescMap[name] || 'Extracted duration'} |\n`;
     }
     md += `\n`;
   }
 
-  // Animation Easing Section
   if (data.animations?.easings && Object.keys(data.animations.easings).length > 0) {
-    md += `### Animation Easing\n\n`;
+    md += `### Easing Evidence\n`;
     for (const [easing] of Object.entries(data.animations.easings)) {
-      md += `- **${easing}**\n`;
+      md += `- \`${easing}\`\n`;
     }
     md += `\n`;
   }
+
+  md += `## Shapes\n\n`;
+  md += `Shape language maps directly to rounded tokens. Keep component corners consistent before introducing bespoke geometry.\n\n`;
+  if (data.borderRadius?.tokens && Object.keys(data.borderRadius.tokens).length > 0) {
+    md += `### Radius Roles\n`;
+    md += `| Token | Value | Px | Role Mapping |\n|------|-------|----|--------------|\n`;
+    for (const [name, value] of Object.entries(data.borderRadius.tokens)) {
+      const px = pxOf(value);
+      let role = 'Control corner';
+      if (px >= 999) role = 'Pill / full round';
+      else if (px <= 2) role = 'Hairline corner';
+      else if (px <= 6) role = 'Subtle corner';
+      else if (px >= 16) role = 'Large surface corner';
+      md += `| ${name} | ${value} | ${px} | ${role} |\n`;
+    }
+    md += `\n`;
+  }
+
+  md += `## Components\n\n`;
+  md += `(none detected — derive buttons, inputs, and cards from color + radius + type tokens above)\n\n`;
+
+  md += `## Do's and Don'ts\n\n`;
+  md += `Guardrails tie generation choices back to validated tokens and evidence-backed hierarchy.\n\n`;
+  md += `| Do | Don't |\n|----|--------|\n`;
+  md += `| Do maintain consistent spacing using the extracted scale | Don't invent colors outside the validated palette |\n`;
+  md += `| Do keep primary accent usage scarce (one dominant action per view) | Don't mix unrelated radius roles in one component |\n`;
+  md += `| Do verify contrast against background/surface tokens | Don't claim elevation without shadow evidence |\n`;
+  md += `| Do map typography to the extracted type rows first | Don't add decorative typefaces without source evidence |\n\n`;
+
+  md += `## Agent Prompt Guide\n\n`;
+  md += `### Example Component Prompts\n`;
+  md += `- Create button component using validated primary color role and spacing tokens.\n`;
+  md += `- Create card component with mapped radius role and evidence-backed elevation.\n`;
+  md += `- Create form input component using inferred typography hierarchy and border roles.\n\n`;
+  md += `### Iteration Guide\n`;
+  md += `1. Start with extracted palette and typography roles only.\n`;
+  md += `2. Map spacing and radius directly from token tables before visual polish.\n`;
+  md += `3. Apply component patterns one section at a time and compare against source intent.\n`;
+  md += `4. Keep elevation claims tied to explicit evidence in output.\n`;
+  md += `5. Iterate with smallest diffs and re-check section hierarchy after each change.\n`;
 
   return md;
 }
@@ -1969,6 +2244,94 @@ north_star: "${northStar || ''}"
 // ============================================================
 // 8. 主提取器
 // ============================================================
+
+/**
+ * Connect to Browserless managed Chromium (required on Vercel).
+ */
+async function connectBrowserless(token) {
+  const explicit = process.env.BROWSERLESS_WS_ENDPOINT;
+  if (explicit) {
+    const ws = explicit.includes('token=')
+      ? explicit
+      : `${explicit}${explicit.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+    console.error('[extractor-v2] Connecting to Browserless via BROWSERLESS_WS_ENDPOINT...');
+    return chromium.connect(ws);
+  }
+
+  const base = (process.env.BROWSERLESS_URL || 'wss://production-sfo.browserless.io').replace(/\/$/, '');
+  const wsEndpoint = `${base}/chromium/playwright?token=${encodeURIComponent(token)}`;
+  console.error('[extractor-v2] Connecting to Browserless Playwright endpoint...');
+  try {
+    return await chromium.connect(wsEndpoint);
+  } catch (err) {
+    // Legacy BaaS endpoint fallback
+    console.error('[extractor-v2] Playwright endpoint failed, trying legacy CDP version endpoint...');
+    const versionResp = await fetch(`https://chrome.browserless.io/json/version?token=${encodeURIComponent(token)}`);
+    if (!versionResp.ok) {
+      throw new Error(`Browserless connection failed (${versionResp.status}). Check BROWSERLESS_TOKEN.`);
+    }
+    const versionData = await versionResp.json();
+    const legacyWs = versionData.webSocketDebuggerUrl
+      + (versionData.webSocketDebuggerUrl.includes('?') ? '&' : '?')
+      + `token=${encodeURIComponent(token)}`;
+    return chromium.connect(legacyWs);
+  }
+}
+
+/**
+ * Launch a local Chromium via Playwright.
+ * Prefer Playwright-managed browser; fall back to env path / system Chrome.
+ */
+async function launchLocalBrowser() {
+  const launchArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+  ];
+
+  const explicitPath = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (explicitPath) {
+    console.error(`[extractor-v2] Launching Chromium from ${explicitPath}`);
+    return chromium.launch({
+      headless: true,
+      executablePath: explicitPath,
+      args: launchArgs,
+    });
+  }
+
+  try {
+    console.error('[extractor-v2] Launching Playwright Chromium...');
+    return await chromium.launch({
+      headless: true,
+      args: launchArgs,
+    });
+  } catch (err) {
+    const message = err?.message || String(err);
+    const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    const linuxChromium = '/usr/bin/chromium';
+    const fallbacks = process.platform === 'darwin'
+      ? [macChrome, linuxChromium]
+      : [linuxChromium, macChrome];
+
+    for (const candidate of fallbacks) {
+      try {
+        console.error(`[extractor-v2] Playwright browser missing, trying ${candidate}`);
+        return await chromium.launch({
+          headless: true,
+          executablePath: candidate,
+          args: launchArgs,
+        });
+      } catch {
+        // try next candidate
+      }
+    }
+
+    throw new Error(
+      `Failed to launch Chromium. Run \`npx playwright install chromium\` or set CHROMIUM_PATH. Last error: ${message}`
+    );
+  }
+}
 
 /**
  * 主提取函数
@@ -1979,25 +2342,11 @@ export async function extractDesignTokens(url, options = {}) {
   let browser;
   const browserlessToken = process.env.BROWSERLESS_TOKEN;
   if (browserlessToken) {
-    // Fetch fresh WebSocket URL from Browserless CDP endpoint
-    console.error(`[extractor-v2] Getting Browserless WebSocket URL...`);
-    const versionResp = await fetch(`https://chrome.browserless.io/json/version?token=${browserlessToken}`);
-    const versionData = await versionResp.json();
-    const wsEndpoint = versionData.webSocketDebuggerUrl + (versionData.webSocketDebuggerUrl.includes('?') ? '&' : '?') + `token=${browserlessToken}`;
-    console.error(`[extractor-v2] Connecting to Browserless: ${wsEndpoint.replace(/\/\/.*@/, '//***@')}`);
-    browser = await chromium.connect(wsEndpoint);
+    browser = await connectBrowserless(browserlessToken);
+  } else if (process.env.VERCEL) {
+    throw new Error('BROWSERLESS_TOKEN is required on Vercel. Add it in Vercel project env settings.');
   } else {
-    const chromiumPath = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
-    browser = await chromium.launch({
-      headless: true,
-      executablePath: chromiumPath,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
-    });
+    browser = await launchLocalBrowser();
   }
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
@@ -2096,14 +2445,16 @@ export async function extractDesignTokens(url, options = {}) {
       }));
     }
 
-    // 11. 生成 Markdown
-    const designMd = generateDesignMd(enrichedData);
+    enrichedData.colors = assignColorSemantics(enrichedData.colors);
 
-    // 12. 推断 color_scheme 和 category
+    // 13. 推断 color_scheme 和 category
     const colorScheme = inferColorScheme(enrichedData.colors);
     const category = inferCategory(enrichedData.colors, colorScheme);
 
-    // 13. 截图（失败不影响主流程）
+    // 14. 生成 Markdown
+    const designMd = generateDesignMd({ ...enrichedData, colorScheme });
+
+    // 15. 截图（失败不影响主流程）
     let screenshotBuffer = null;
     if (options.captureScreenshot) {
       console.error(`[extractor-v2] Capturing screenshot...`);
