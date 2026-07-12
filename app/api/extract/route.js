@@ -213,8 +213,8 @@ export async function POST(request) {
     extractionJobs.set(jobId, { status: 'saving_to_db', progress: 90 });
     const db = await getDb();
     await db.execute({
-      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, spacing, shadows, border_radius, raw_data, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      sql: `INSERT INTO cards (id, name, url, preview, screenshot, colors, fonts, north_star, color_scheme, category, typography, type_scale, gradient, spacing, shadows, border_radius, css_variables, breakpoints, spacing_base, design_system, dos, donts, raw_data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               url = excluded.url,
@@ -231,6 +231,12 @@ export async function POST(request) {
               spacing = excluded.spacing,
               shadows = excluded.shadows,
               border_radius = excluded.border_radius,
+              css_variables = excluded.css_variables,
+              breakpoints = excluded.breakpoints,
+              spacing_base = excluded.spacing_base,
+              design_system = excluded.design_system,
+              dos = excluded.dos,
+              donts = excluded.donts,
               raw_data = excluded.raw_data,
               created_at = excluded.created_at`,
       args: [
@@ -250,7 +256,25 @@ export async function POST(request) {
         JSON.stringify(result.spacing || {}),
         JSON.stringify(result.shadows || {}),
         JSON.stringify(result.borderRadius || {}),
-        JSON.stringify({ tokensJson, variablesCss, themeCss, animations: result.animations }),
+        JSON.stringify(result.cssVariables || {}),
+        JSON.stringify(result.breakpoints || []),
+        result.spacingBase || null,
+        null, // design_system - reserved for future use
+        JSON.stringify(result.dos || []),
+        JSON.stringify(result.donts || []),
+        JSON.stringify({
+            tokensJson,
+            variablesCss,
+            themeCss,
+            animations: result.animations,
+            designSystem: {
+              components: result.components || [],
+              layout: result.layout || {},
+              spacing: result.spacing || {},
+              responsiveStrategy: result.responsiveStrategy || null,
+              breakpointRoles: result.breakpointRoles || null,
+            },
+          }),
         now,
       ],
     });
@@ -273,7 +297,15 @@ export async function POST(request) {
       shadows: result.shadows,
       borderRadius: result.borderRadius,
       animations: result.animations,
+      cssVariables: result.cssVariables,
+      breakpoints: result.breakpoints,
+      spacingBase: result.spacingBase,
+      dos: result.dos,
+      donts: result.donts,
       northStar: result.northStar,
+      responsiveStrategy: result.responsiveStrategy,
+      breakpointRoles: result.breakpointRoles,
+      components: result.components || [],
       colorScheme: result.colorScheme,
       category: result.category,
       screenshot: screenshotPath,

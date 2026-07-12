@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { BackIcon, ExternalIcon, CopyIcon, CheckIcon, DownloadIcon, CodeIcon, CloseIcon } from './components/icons.jsx';
+import { getDesignMd as designMd } from './utils/design-md.js';
+import { toCssName as exportUtil, getFormatCode as formatCode, getStyleDictionary as styleDict, getExportCode as exportCode } from './utils/export-utils.js';
 
 const CATEGORY_COLORS = {
   minimal:   { bg: '#f5f3f0', accent: '#1a100e' },
@@ -13,64 +16,6 @@ const CATEGORY_COLORS = {
   gradient:  { bg: '#f0f4ff', accent: '#6366f1' },
   dark:      { bg: '#0f0f0f', accent: '#ffffff' },
 };
-
-function BackIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function ExternalIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <path d="M6 1h6v6M12 1L6 7M3 3.5H1.5V11h7.5V9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-      <rect x="4" y="4" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.2"/>
-      <path d="M3 8H2a1 1 0 01-1-1V2a1 1 0 011-1h5a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.2"/>
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-      <path d="M6 2v6M3.5 5.5L6 8l2.5-2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M2 10h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
-function CodeIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M4 4L1 7l3 3M10 4l3 3-3 3M9 2l-4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  );
-}
 
 // i18n translations
 const T = {
@@ -448,190 +393,50 @@ export default function StylePage() {
     return rawAnim;
   })();
 
+  // New fields
+  const cssVariables = (() => {
+    if (!card.css_variables) return {};
+    try { return typeof card.css_variables === 'string' ? JSON.parse(card.css_variables) : card.css_variables; } catch { return {}; }
+  })();
+
+  const breakpoints = (() => {
+    if (!card.breakpoints) return [];
+    try { return typeof card.breakpoints === 'string' ? JSON.parse(card.breakpoints) : card.breakpoints; } catch { return []; }
+  })();
+
+  const spacingBase = card.spacing_base || null;
+
+  const dos = (() => {
+    if (!card.dos) return [];
+    try { return typeof card.dos === 'string' ? JSON.parse(card.dos) : card.dos; } catch { return []; }
+  })();
+
+  const donts = (() => {
+    if (!card.donts) return [];
+    try { return typeof card.donts === 'string' ? JSON.parse(card.donts) : card.donts; } catch { return []; }
+  })();
+
   const catStyle = CATEGORY_COLORS[card.category?.toLowerCase()] || CATEGORY_COLORS.minimal;
   const schemeClass = card.color_scheme === 'dark' ? 'scheme-dark' : 'scheme-light';
 
   function getDesignMd() {
-    const name = card?.name || '';
-    const northStar = card?.north_star || '';
-    const url = card?.url || '';
-    let md = `# ${name} — Style Reference\n`;
-    if (northStar) md += `> ${northStar}\n\n`;
-    md += `**Theme:** ${card?.color_scheme || 'light'}\n\n`;
-    if (colors.length > 0) {
-      md += `## Color Palette\n\n`;
-      colors.forEach(c => { md += `- **${c.name}** \`${c.hex}\` — ${c.description || ''}\n`; });
-      md += '\n';
-    }
-    if (fonts.length > 0) {
-      md += `## Typography\n\n`;
-      fonts.forEach(f => { md += `- **${f.fontFamily}** — ${f.weight || ''}\n`; });
-      md += '\n';
-    }
-    if (typeScale?.steps?.length > 0) {
-      md += `## Type Scale\n\n`;
-      typeScale.steps.forEach(s => { md += `- **${s.name}** ${s.size}px / ${s.weight} / ${s.line_height}\n`; });
-      md += '\n';
-    }
-    if (gradients.length > 0) {
-      md += `## Gradients\n\n`;
-      gradients.forEach(g => { const val = typeof g === 'string' ? g : g.value; md += `- **${g.name || 'Gradient'}** \`${val}\`\n`; });
-      md += '\n';
-    }
-    if (ds.components?.length > 0) {
-      md += `## Components\n\n`;
-      ds.components.slice(0, 10).forEach(c => { md += `- ${c.name || c}\n`; });
-      md += '\n';
-    }
-    if (url) md += `---\nSource: ${url}\n`;
-    return md;
+    return designMd(card, colors, fonts, typeScale, breakpoints, spacingBase, dos, donts, ds);
   }
 
   function toCssName(name) {
-    return name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+    return exportUtil(name);
   }
 
   function getFormatCode(fmt) {
-    // 优先使用服务端预生成的格式
-    if (fmt === 'CSS Variables' && variablesCss) return variablesCss;
-    if (fmt === 'Tailwind v4' && themeCss) return themeCss;
-    if (fmt === 'Design Tokens' && tokensJson) return tokensJson;
-
-    // 兜底：客户端生成
-    if (fmt === 'CSS Variables') {
-      const lines = [':root {'];
-      const brand = colors.filter(c => c.group === 'brand');
-      const accent = colors.filter(c => c.group === 'accent');
-      const neutral = colors.filter(c => c.group === 'neutral');
-      if (brand.length > 0) { lines.push('  /* Brand Colors */'); brand.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
-      if (accent.length > 0) { lines.push('  /* Accent Colors */'); accent.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
-      if (neutral.length > 0) { lines.push('  /* Neutral Colors */'); neutral.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
-      const other = colors.filter(c => !c.group);
-      if (other.length > 0) { lines.push('  /* Other Colors */'); other.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
-      if (gradients.length > 0) { lines.push('  /* Gradients */'); gradients.forEach((g,i) => lines.push(`  --gradient-${toCssName(g.type||`gradient-${i+1}`)}: ${g.value||g.css||g};`)); lines.push(''); }
-      if (fonts.length > 0) { lines.push('  /* Font Families */'); fonts.forEach(f => lines.push(`  --font-family-${toCssName(f.fontFamily)}: "${f.fontFamily}", sans-serif;`)); lines.push(''); }
-      if (typeScale?.steps?.length > 0) { lines.push('  /* Font Sizes */'); typeScale.steps.forEach(s => lines.push(`  --font-size-${toCssName(s.name||s.role||`step-${s.size}`)}: ${s.size}px;`)); if (typeScale.base) lines.push(`  --font-size-base: ${typeScale.base}px;`); lines.push(''); }
-      while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-      lines.push('}');
-      return lines.join('\n');
-    } else if (fmt === 'Tailwind v4') {
-      const lines = ['@theme {'];
-      if (colors.length > 0) { lines.push('  /* Colors */'); colors.forEach(c => lines.push(`  --color-${toCssName(c.name||c.hex)}: ${c.hex};`)); lines.push(''); }
-      if (gradients.length > 0) { lines.push('  /* Gradients */'); gradients.forEach((g,i) => lines.push(`  --gradient-${toCssName(g.type||`gradient-${i+1}`)}: ${g.value||g.css||g};`)); lines.push(''); }
-      if (fonts.length > 0) { lines.push('  /* Font Families */'); fonts.forEach(f => lines.push(`  --font-family-${toCssName(f.fontFamily)}: "${f.fontFamily}", sans-serif;`)); lines.push(''); }
-      if (typeScale?.steps?.length > 0) { lines.push('  /* Font Sizes */'); typeScale.steps.forEach(s => lines.push(`  --font-size-${toCssName(s.name||s.role||`step-${s.size}`)}: ${s.size}px;`)); if (typeScale.base) lines.push(`  --font-size-base: ${typeScale.base}px;`); lines.push(''); }
-      while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-      lines.push('}');
-      return lines.join('\n');
-    } else {
-      // DTCG standard Design Tokens JSON
-      const tokens = { $schema: 'https://design-tokens.github.io/community-group/format/' };
-      if (colors.length > 0) { tokens.colors = {}; colors.forEach(c => { tokens.colors[toCssName(c.name||c.hex)] = { $value: c.hex, $type: 'color', $description: c.role || `${c.name||c.hex} color` }; }); }
-      if (gradients.length > 0) { tokens.gradients = {}; gradients.forEach((g,i) => { tokens.gradients[toCssName(g.type||`gradient-${i+1}`)] = { $value: g.value||g.css||'', $type: 'gradient' }; }); }
-      if (fonts.length > 0 || typeScale?.steps?.length > 0) { tokens.typography = {}; if (fonts.length > 0) { tokens.typography.fontFamily = {}; fonts.forEach(f => { tokens.typography.fontFamily[toCssName(f.fontFamily)] = { $value: [f.fontFamily], $type: 'fontFamily' }; }); } if (typeScale?.steps?.length > 0) { tokens.typography.fontSize = {}; typeScale.steps.forEach(s => { tokens.typography.fontSize[toCssName(s.name||s.role||`step-${s.size}`)] = { $value: `${s.size}px`, $type: 'dimension' }; }); } }
-      tokens.$metadata = { name: card?.name || 'Design Tokens' };
-      return JSON.stringify(tokens, null, 2);
-    }
+    return formatCode(fmt, colors, gradients, fonts, typeScale, card, variablesCss, themeCss, tokensJson);
   }
 
   function getStyleDictionary() {
-    // 从 ds.spacing 解析 tokens
-    const spacingTokens = {};
-    if (ds.spacing?.tokens) {
-      Object.entries(ds.spacing.tokens).forEach(([k, v]) => { spacingTokens[k] = v; });
-    } else if (ds.spacing && typeof ds.spacing === 'object') {
-      Object.entries(ds.spacing).forEach(([k, v]) => {
-        if (typeof v === 'object' && v !== null) {
-          Object.entries(v).forEach(([sk, sv]) => { spacingTokens[`${k}-${sk}`] = sv; });
-        } else {
-          spacingTokens[k] = v;
-        }
-      });
-    }
-
-    // 从 raw.shapes 解析 shadows 和 borderRadius
-    const shadowTokens = {};
-    const radiusTokens = {};
-    if (raw.shapes?.shadows) {
-      raw.shapes.shadows.slice(0, 4).forEach((s, i) => {
-        const names = ['sm', 'md', 'lg', 'xl'];
-        shadowTokens[`shadow-${names[i]}`] = typeof s === 'string' ? s : (s.value || s.shadow);
-      });
-    }
-    if (raw.shapes?.radii) {
-      raw.shapes.radii.slice(0, 4).forEach((r, i) => {
-        const names = ['sm', 'md', 'lg', 'full'];
-        radiusTokens[`radius-${names[i]}`] = `${r.value}px`;
-      });
-    }
-
-    const tokenSets = [];
-    const sd = {
-      $schema: 'https://design-tokens.github.io/community-group/format/',
-    };
-
-    // Colors
-    if (colors.length > 0) {
-      sd.color = {};
-      for (const c of colors) {
-        const key = toCssName(c.name || c.hex);
-        sd.color[key] = { $value: c.hex, $type: 'color' };
-        if (c.role) sd.color[key].$description = c.role;
-      }
-      tokenSets.push('color');
-    }
-
-    // Typography
-    if (fonts.length > 0) {
-      sd.typography = { fontFamily: {} };
-      for (const f of fonts) {
-        sd.typography.fontFamily[toCssName(f.fontFamily)] = { $value: [f.fontFamily], $type: 'fontFamily' };
-      }
-      tokenSets.push('typography');
-    }
-
-    // Spacing
-    if (Object.keys(spacingTokens).length > 0) {
-      sd.spacing = {};
-      for (const [name, value] of Object.entries(spacingTokens)) {
-        const key = name.replace('spacing-', '');
-        sd.spacing[toCssName(key)] = { $value: value, $type: 'dimension' };
-      }
-      tokenSets.push('spacing');
-    }
-
-    // Shadows
-    if (Object.keys(shadowTokens).length > 0) {
-      sd.shadow = {};
-      for (const [name, value] of Object.entries(shadowTokens)) {
-        const key = name.replace('shadow-', '');
-        sd.shadow[toCssName(key)] = { $value: value, $type: 'shadow' };
-      }
-      tokenSets.push('shadow');
-    }
-
-    // Border Radius
-    if (Object.keys(radiusTokens).length > 0) {
-      sd.borderRadius = {};
-      for (const [name, value] of Object.entries(radiusTokens)) {
-        const key = name.replace('radius-', '');
-        sd.borderRadius[toCssName(key)] = { $value: value, $type: 'dimension' };
-      }
-      tokenSets.push('borderRadius');
-    }
-
-    sd.$metadata = {
-      name: card?.name || 'Design Tokens',
-      source: card?.url || '',
-      format: 'Style Dictionary',
-      tokenSetOrder: tokenSets,
-    };
-
-    return JSON.stringify(sd, null, 2);
+    return styleDict(colors, fonts, ds, raw, card);
   }
 
   function getExportCode() {
-    return getFormatCode(exportFormat);
+    return exportCode(exportFormat, colors, gradients, fonts, typeScale, card, variablesCss, themeCss, tokensJson, ds, raw);
   }
 
   return (
@@ -996,6 +801,64 @@ export default function StylePage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {/* CSS Variables */}
+          {Object.keys(cssVariables).length > 0 && (
+            <section className="detail-section">
+              <h2 className="detail-section-title">CSS Variables</h2>
+              <div className="spacing-grid">
+                {Object.entries(cssVariables).slice(0, 20).map(([key, val]) => (
+                  <div key={key} className="spacing-item">
+                    <span className="spacing-key" style={{fontSize:'10px'}}>{key}</span>
+                    <span className="spacing-val">{typeof val === 'string' && val.length > 40 ? val.substring(0, 40) + '...' : String(val)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Breakpoints */}
+          {breakpoints.length > 0 && (
+            <section className="detail-section">
+              <h2 className="detail-section-title">{locale === 'zh' ? '响应式断点' : 'Breakpoints'}</h2>
+              <div className="spacing-grid">
+                {breakpoints.map((bp, i) => (
+                  <div key={i} className="spacing-item">
+                    <span className="spacing-key">{bp}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Spacing Base */}
+          {spacingBase && (
+            <section className="detail-section">
+              <h2 className="detail-section-title">{locale === 'zh' ? '基础网格' : 'Spacing Grid'}</h2>
+              <div className="detail-text-block">{locale === 'zh' ? `基础网格单位: ${spacingBase}` : `Base grid unit: ${spacingBase}`}</div>
+            </section>
+          )}
+
+          {/* Do's & Don'ts */}
+          {(dos.length > 0 || donts.length > 0) && (
+            <section className="detail-section">
+              <h2 className="detail-section-title">{T[locale].dosDonts}</h2>
+              <div className="dos-donts">
+                {dos.length > 0 && (
+                  <div className="dos-column">
+                    <div className="dos-header"><span className="dos-icon">&#10003;</span><span>Do</span></div>
+                    <ul className="dos-list">{dos.map((d, i) => <li key={i} className="dos-item">{d}</li>)}</ul>
+                  </div>
+                )}
+                {donts.length > 0 && (
+                  <div className="donts-column">
+                    <div className="donts-header"><span className="donts-icon">&#10005;</span><span>Don't</span></div>
+                    <ul className="donts-list">{donts.map((d, i) => <li key={i} className="donts-item">{d}</li>)}</ul>
+                  </div>
+                )}
               </div>
             </section>
           )}

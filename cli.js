@@ -4,6 +4,12 @@
  * Usage: node cli.js <url> [--output file.md] [--no-ai]
  */
 
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// 加载 .env.local（Next.js 约定）
+dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env.local') });
 import { extractDesignTokens } from './src/extractor-v2.js';
 import * as fs from 'fs';
 

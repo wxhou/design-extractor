@@ -20,6 +20,12 @@ const MIGRATIONS = [
   'ALTER TABLE cards ADD COLUMN spacing TEXT',
   'ALTER TABLE cards ADD COLUMN shadows TEXT',
   'ALTER TABLE cards ADD COLUMN border_radius TEXT',
+  'ALTER TABLE cards ADD COLUMN css_variables TEXT',
+  'ALTER TABLE cards ADD COLUMN breakpoints TEXT',
+  'ALTER TABLE cards ADD COLUMN spacing_base TEXT',
+  'ALTER TABLE cards ADD COLUMN design_system TEXT',
+  'ALTER TABLE cards ADD COLUMN dos TEXT',
+  'ALTER TABLE cards ADD COLUMN donts TEXT',
 ];
 
 // wasm 文件位置：运行时动态检测
@@ -59,6 +65,14 @@ async function getSqlDb() {
     if (fs.existsSync(DB_PATH)) {
       const buf = fs.readFileSync(DB_PATH);
       _dbInstance = new SQL.Database(buf);
+      // 执行迁移（忽略已存在的列错误）
+      for (const migration of MIGRATIONS) {
+        try {
+          _dbInstance.run(migration);
+        } catch (e) {
+          // 列已存在时静默跳过
+        }
+      }
     } else {
       const db = new SQL.Database();
       db.run(`
@@ -80,6 +94,12 @@ async function getSqlDb() {
           spacing      TEXT,
           shadows      TEXT,
           border_radius TEXT,
+          css_variables TEXT,
+          breakpoints  TEXT,
+          spacing_base TEXT,
+          design_system TEXT,
+          dos          TEXT,
+          donts        TEXT,
           raw_data     TEXT,
           created_at   TEXT
         )

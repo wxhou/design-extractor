@@ -23,6 +23,7 @@ dist/
 
 # Screenshots (generated at runtime)
 public/screenshots/
+tmp/
 
 # Logs
 npm-debug.log*
@@ -47,10 +48,21 @@ openspec/
 .agents/
 .codex/
 AGENTS.md
+.opencode/
+opencode.jsonc
+docs/
 
 # Testing
 coverage/
-.vercel
+tests/
+tests/playwright/test-results/
 test-results/
 playwright-report/
 blob-report/
+.vercel
+.worktrees
+.superpowers
+
+# All dot-prefixed directories (catch-all for agent tooling, cache, etc.)
+.*/
+!/.git/
