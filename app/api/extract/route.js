@@ -1,4 +1,4 @@
-import { extractDesignTokens, isValidDomain, normalizeUrl } from '@/src/extractor-v2.js';
+import { extractDesignTokens, isUrlSafe, isValidDomain, normalizeUrl } from '@/src/extractor-v2.js';
 import { getDb } from '@/src/db.js';
 import { checkFreeIpLimit, getFreeExtractIp, getUtcDay, incrementFreeIpUsage } from '@/src/rate-limit.js';
 import { cleanupLocalScreenshot, findExistingCard, saveExtraction } from '@/src/save-extraction.js';
@@ -44,6 +44,10 @@ export async function POST(request) {
   const normalized = normalizeUrl(url);
   if (!normalized.valid) {
     return Response.json({ success: false, error: '请输入有效的网址' }, { status: 400 });
+  }
+
+  if (!isUrlSafe(normalized.full)) {
+    return Response.json({ success: false, error: '不允许访问内网地址' }, { status: 403 });
   }
 
   const db = await getDb();
