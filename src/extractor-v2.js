@@ -9,12 +9,12 @@
  *   - extractor.js        — DOM 遍历、样式/字体/布局/组件提取
  *   - ai-enrich.js        — CSS 证据压缩 + AI 增强
  *   - code-generators.js  — 多格式输出（CSS变量/Design Tokens/DESIGN.md）
+ *
+ * 注意：playwright-core 和 openai 使用动态 import（懒加载），
+ * 避免在仅使用代码生成器（tokens/variables/theme 等）的 Vercel 路由中加载失败。
  */
 
-import { chromium } from 'playwright-core';
-import OpenAI from 'openai';
-
-// ── 子模块导入 ──
+// ── 子模块导入（零外部依赖，安全地在任意环境加载）──
 import { parseColor, clusterColors, inferColorScheme } from './color-utils.js';
 import {
   extractStylesFromPage, extractFonts, extractTypeScale,
@@ -99,7 +99,8 @@ export async function extractDesignTokens(url, options = {}) {
   let browser;
   let context;
   try {
-    // 1. Start browser
+    // 1. Start browser（懒加载 playwright-core，避免在 Vercel serverless 中加载失败）
+    const { chromium } = await import('playwright-core');
     const browserlessToken = process.env.BROWSERLESS_TOKEN;
     if (browserlessToken) {
       console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);

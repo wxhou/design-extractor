@@ -5,6 +5,7 @@
  */
 
 import { inferColorName, inferColorGroup, generateColorRole } from './color-utils.js';
+import OpenAI from 'openai';
 
 // ============================================================
 // 5.9 CSS 证据压缩（含组件候选）
