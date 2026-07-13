@@ -10,8 +10,14 @@ let _chromium = null;
 export async function getChromium() {
   if (!_chromium) {
     process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
-    const { chromium } = await import('playwright-core');
-    _chromium = chromium;
+    // Try playwright-core first, fall back to playwright (bundled differently on Vercel)
+    try {
+      const { chromium } = await import('playwright-core');
+      _chromium = chromium;
+    } catch {
+      const { chromium } = await import('playwright');
+      _chromium = chromium;
+    }
   }
   return _chromium;
 }

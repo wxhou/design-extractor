@@ -29,7 +29,7 @@ function getFriendlyError(errorMessage) {
     return '线上提取需要配置 BROWSERLESS_TOKEN，本地提取请使用 CLI: npx design-extractor <url>';
   }
 
-  if (errorMessage.includes('playwright-core') || errorMessage.includes('browsers.json')) {
+  if (errorMessage.includes('playwright')) {
     return '环境缺少浏览器运行库，已配 BROWSERLESS_TOKEN 请确认格式正确';
   }
 
