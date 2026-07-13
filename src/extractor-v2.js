@@ -155,10 +155,12 @@ export async function extractDesignTokens(url, options = {}) {
     const { chromium } = await import('playwright');
     if (browserlessToken) {
       console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);
-      const versionResp = await fetch(`https://chrome.browserless.io/json/version?token=${browserlessToken}`);
+      const versionResp = await fetch('https://chrome.browserless.io/json/version', {
+        headers: { 'Authorization': `Bearer ${browserlessToken}` },
+      });
       const versionData = await versionResp.json();
       const wsEndpoint = versionData.webSocketDebuggerUrl + (versionData.webSocketDebuggerUrl.includes('?') ? '&' : '?') + `token=${browserlessToken}`;
-      console.log(`[extractor-v2] Connecting to Browserless: ${wsEndpoint.replace(/\/\/[^@]+@/, '//***@')}`);
+      console.log(`[extractor-v2] Connecting to Browserless: ${wsEndpoint.replace(/token=[^&]+/, 'token=***')}`);
       browser = await chromium.connect(wsEndpoint);
     } else {
       const chromiumPath = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
