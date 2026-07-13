@@ -152,7 +152,7 @@ export async function extractDesignTokens(url, options = {}) {
       }
     }
 
-    const { chromium } = await import('playwright');
+    const { chromium } = await import('playwright-core');
     if (browserlessToken) {
       console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);
       const versionResp = await fetch('https://chrome.browserless.io/json/version', {
