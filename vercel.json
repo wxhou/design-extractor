@@ -1,16 +1,10 @@
 {
   "functions": {
     "app/api/extract/route.js": {
-      "maxDuration": 60,
-      "environment": {
-        "PLAYWRIGHT_BROWSERS_PATH": "0"
-      }
+      "maxDuration": 60
     },
     "app/api/v1/extract/route.js": {
-      "maxDuration": 60,
-      "environment": {
-        "PLAYWRIGHT_BROWSERS_PATH": "0"
-      }
+      "maxDuration": 60
     }
   }
 }
