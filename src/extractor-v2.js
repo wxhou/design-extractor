@@ -157,7 +157,7 @@ export async function extractDesignTokens(url, options = {}) {
       // Connect to Browserless via WebSocket — the /json/version endpoint is unreliable
       const wsEndpoint = `wss://chrome.browserless.io?token=${browserlessToken}`;
       console.log(`[extractor-v2] Connecting to Browserless WebSocket...`);
-      browser = await chromium.connect(wsEndpoint);
+      browser = await chromium.connectOverCDP(wsEndpoint);
     } else {
       const chromiumPath = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
       browser = await chromium.launch({
