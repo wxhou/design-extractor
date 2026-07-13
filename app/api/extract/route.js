@@ -29,7 +29,7 @@ function getFriendlyError(errorMessage) {
     return '线上提取需要配置 BROWSERLESS_TOKEN，本地提取请使用 CLI: npx design-extractor <url>';
   }
 
-  return errorMessage;
+  return '提取失败，请稍后重试';
 }
 
 const extractionJobs = new Map();
