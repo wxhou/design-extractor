@@ -256,13 +256,16 @@ export async function extractDesignTokens(url, options = {}) {
     let enrichedData = { ...baseData };
     let screenshotPath = null;
 
+    let screenshotBuffer = null;
     try {
-      const screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
+      screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
       screenshotPath = `/tmp/screenshot-${Date.now()}.png`;
       const fs = await import('fs');
       fs.writeFileSync(screenshotPath, screenshotBuffer);
 
       enrichedData = await enrichWithAI(baseData, { screenshotBuffer, cssEvidence });
+      // Store screenshot buffer for return value
+      enrichedData._screenshotBuffer = screenshotBuffer;
       console.log(`[extractor-v2] AI enrichment complete`);
     } catch (aiError) {
       console.error(`[extractor-v2] AI enrichment failed: ${aiError.message}`);
@@ -277,7 +280,9 @@ export async function extractDesignTokens(url, options = {}) {
 
     return {
       success: true,
+      siteName: enrichedData.siteName || new URL(targetUrl).hostname.replace(/^www\./, ''),
       url: targetUrl,
+      screenshot: enrichedData._screenshotBuffer || null,
       colors: enrichedData.colors,
       fonts: enrichedData.fonts,
       typeScale: enrichedData.typeScale,
