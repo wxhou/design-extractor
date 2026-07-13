@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "cli": "node cli.js",
+    "postinstall": "node scripts/postinstall.mjs",
     "migrate:auth": "node scripts/migrate-auth-tables.mjs",
     "playwright:install": "playwright install chromium"
   },
