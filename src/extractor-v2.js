@@ -139,9 +139,20 @@ export async function extractDesignTokens(url, options = {}) {
   let browser;
   let context;
   try {
-    // 1. Start browser（lazy import — Vercel serverless 无本地 Chromium，需 BROWSERLESS_TOKEN）
-    const { chromium } = await import('playwright');
+    // 1. Start browser
+    // 优先使用 Browserless（Vercel serverless 无本地浏览器，必须配置 BROWSERLESS_TOKEN）
     const browserlessToken = process.env.BROWSERLESS_TOKEN;
+    if (!browserlessToken) {
+      const hasLocalChrome = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH;
+      if (!hasLocalChrome) {
+        throw new Error(
+          '线上环境提取需要配置 BROWSERLESS_TOKEN 环境变量。' +
+          '本地提取请使用 CLI: node cli.js <url> 或 npx design-extractor <url>'
+        );
+      }
+    }
+
+    const { chromium } = await import('playwright');
     if (browserlessToken) {
       console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);
       const versionResp = await fetch(`https://chrome.browserless.io/json/version?token=${browserlessToken}`);
