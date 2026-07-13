@@ -151,9 +151,8 @@ export async function extractDesignTokens(url, options = {}) {
       }
     }
 
-    // 在 Vercel serverless 上 playwright-core 找不到 browsers.json，需提前设环境变量
     process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '0';
-    const { chromium } = await import('playwright-core');
+    const { chromium } = await import('./browser.js').then(m => m.getChromium());
     if (browserlessToken) {
       console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);
       const versionResp = await fetch('https://chrome.browserless.io/json/version', {
