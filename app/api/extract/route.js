@@ -25,11 +25,15 @@ function getFriendlyError(errorMessage) {
     return '无法访问该网站，请检查网址是否正确';
   }
 
-  if (errorMessage.includes('BROWSERLESS_TOKEN')) {
+  if (errorMessage.includes('BROWSERLESS_TOKEN') || errorMessage.includes('browserless')) {
     return '线上提取需要配置 BROWSERLESS_TOKEN，本地提取请使用 CLI: npx design-extractor <url>';
   }
 
-  return '提取失败，请稍后重试';
+  if (errorMessage.includes('playwright-core') || errorMessage.includes('browsers.json')) {
+    return '环境缺少浏览器运行库，已配 BROWSERLESS_TOKEN 请确认格式正确';
+  }
+
+  return errorMessage;
 }
 
 const extractionJobs = new Map();
