@@ -139,8 +139,8 @@ export async function extractDesignTokens(url, options = {}) {
   let browser;
   let context;
   try {
-    // 1. Start browser（懒加载 playwright-core，避免在 Vercel serverless 中加载失败）
-    const { chromium } = await import('playwright-core');
+    // 1. Start browser（lazy import — Vercel serverless 无本地 Chromium，需 BROWSERLESS_TOKEN）
+    const { chromium } = await import('playwright');
     const browserlessToken = process.env.BROWSERLESS_TOKEN;
     if (browserlessToken) {
       console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);
