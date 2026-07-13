@@ -139,8 +139,7 @@ export async function extractDesignTokens(url, options = {}) {
   let browser;
   let context;
   try {
-    // 1. Start browser
-    // 优先使用 Browserless（Vercel serverless 无本地浏览器，必须配置 BROWSERLESS_TOKEN）
+    // 1. Start browser — Vercel serverless 环境必须通过 Browserless
     const browserlessToken = process.env.BROWSERLESS_TOKEN;
     if (!browserlessToken) {
       const hasLocalChrome = process.env.CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -152,6 +151,8 @@ export async function extractDesignTokens(url, options = {}) {
       }
     }
 
+    // 在 Vercel serverless 上 playwright-core 找不到 browsers.json，需提前设环境变量
+    process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '0';
     const { chromium } = await import('playwright-core');
     if (browserlessToken) {
       console.log(`[extractor-v2] Getting Browserless WebSocket URL...`);
