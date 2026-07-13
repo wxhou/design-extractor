@@ -1,4 +1,4 @@
-export const FREE_DAILY_LIMIT = 5;
+export const FREE_DAILY_LIMIT = 50;
 
 export function getUtcDay(date = new Date()) {
   return date.toISOString().slice(0, 10);
