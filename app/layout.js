@@ -1,8 +1,7 @@
 import './globals.css'
-import { Agentation } from 'agentation'
 
 export const metadata = {
-  title: 'Url2Design | URL → agent-ready design system',
+  title: 'Url2Design | URL → Design System',
   description: 'Paste any URL. Extract DESIGN.md, Tailwind, CSS variables, and DTCG tokens. Free on the web, paid API for agents.',
   icons: {
     icon: '/favicon.svg',
@@ -16,14 +15,11 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&family=JetBrains+Mono:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body>
-        {children}
-        {process.env.NODE_ENV === 'development' && <Agentation endpoint="http://localhost:4747" />}
-      </body>
+      <body>{children}</body>
     </html>
   )
 }

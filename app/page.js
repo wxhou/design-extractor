@@ -375,7 +375,11 @@ export default function Home() {
 
   return (
     <div className="page">
-      <div className="page-grain" aria-hidden="true" />
+      <div className="page-ambient" aria-hidden="true">
+        <div className="page-ambient-glow page-ambient-glow--1" />
+        <div className="page-ambient-glow page-ambient-glow--2" />
+        <div className="page-ambient-glow page-ambient-glow--3" />
+      </div>
 
       <header className="header">
         <a className="header-logo" href="/">
@@ -397,19 +401,25 @@ export default function Home() {
       </header>
 
       <section className="hero-stage">
-        <div className="hero-atmosphere" aria-hidden="true" />
+        <div className="hero-grid" aria-hidden="true" />
         <div className="hero-inner">
           <div className="hero-copy">
-            <p className="hero-brand">{t.brand}</p>
-            <h1 className="hero-title">{t.heroTitle}</h1>
+            <p className="hero-eyebrow">{t.brand}</p>
+            <h1 className="hero-title">
+              {locale === 'zh' ? (
+                <>输入 URL，输出 <span className="hero-title-highlight">设计系统</span>。</>
+              ) : (
+                <>URL in. <span className="hero-title-highlight">Design system</span> out.</>
+              )}
+            </h1>
             <p className="hero-subtitle">{t.heroSub}</p>
 
-            <div className="hero-extract search-section">
-              <form className="search-container" onSubmit={handleSubmit}>
-                <div className="search-input-wrap">
-                  <LinkSimple className="search-icon" size={16} weight="bold" />
+            <div className="hero-form-wrap">
+              <form className="hero-form" onSubmit={handleSubmit}>
+                <div className="hero-form-input-wrap">
+                  <LinkSimple className="hero-form-icon" size={16} weight="bold" />
                   <input
-                    className="search-input"
+                    className="hero-form-input"
                     type="text"
                     placeholder={t.extractPlaceholder}
                     value={url}
@@ -418,7 +428,7 @@ export default function Home() {
                   />
                 </div>
                 <button
-                  className="search-btn"
+                  className="hero-form-btn"
                   type="submit"
                   disabled={loading || !url}
                 >
@@ -483,10 +493,11 @@ export default function Home() {
           ))}
         </section>
 
-        <div id="library" className="library-heading">
-          <h2 className="library-title">{t.libraryTitle}</h2>
-          <p className="library-subtitle">{t.librarySub}</p>
-        </div>
+        <div id="library" className="library-section">
+          <div className="library-heading">
+            <h2 className="library-title">{t.libraryTitle}</h2>
+            <p className="library-subtitle">{t.librarySub}</p>
+          </div>
 
         <div className="library-toolbar">
           <div className="library-search">
@@ -549,7 +560,7 @@ export default function Home() {
 
         {loading && (
           <div className="loading-wrap">
-            <div className="loading-skeleton-bar" />
+            <div className="loading-spinner" />
             <div className="loading-text">{locale === 'zh' ? '正在提取 ' : 'Extracting '}{url}</div>
           </div>
         )}
@@ -615,7 +626,7 @@ export default function Home() {
 
             {loadingMore && (
               <div className="loading-wrap" style={{ marginTop: '24px' }}>
-                <div className="loading-skeleton-bar" />
+                <div className="loading-spinner" />
               </div>
             )}
 
@@ -626,6 +637,8 @@ export default function Home() {
             )}
           </div>
         )}
+
+        </div>{/* /library-section */}
 
         <section className="api-band">
           <div className="api-band-copy">
