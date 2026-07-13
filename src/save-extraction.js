@@ -117,7 +117,7 @@ export async function saveExtraction(db, normalized, result, options = {}) {
     data: {
       cardId,
       isDuplicate: false,
-      designMd: result.designMd,
+      designMd: result.designMd || result.raw_data?.designMd,
       siteName: result.siteName,
       colors: result.colors,
       fonts: result.fonts,
