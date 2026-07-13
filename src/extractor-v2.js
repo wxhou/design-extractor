@@ -152,7 +152,7 @@ export async function extractDesignTokens(url, options = {}) {
     }
 
     process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '0';
-    const { chromium } = await import('./browser.js').then(m => m.getChromium());
+    const chromium = await import('./browser.js').then(m => m.getChromium());
     if (browserlessToken) {
       // Connect to Browserless via WebSocket — the /json/version endpoint is unreliable
       const wsEndpoint = `wss://chrome.browserless.io?token=${browserlessToken}`;
