@@ -312,6 +312,7 @@ export async function extractDesignTokens(url, options = {}) {
 
   } catch (error) {
     console.error(`[extractor-v2] Error: ${error.message}`);
+    console.error(`[extractor-v2] Stack: ${error.stack?.substring(0, 500)}`);
     return {
       success: false,
       error: error.message

@@ -14,9 +14,15 @@ export async function getChromium() {
     try {
       const { chromium } = await import('playwright-core');
       _chromium = chromium;
-    } catch {
-      const { chromium } = await import('playwright');
-      _chromium = chromium;
+    } catch (e) {
+      console.error('[browser] playwright-core import failed:', e.message);
+      try {
+        const { chromium } = await import('playwright');
+        _chromium = chromium;
+      } catch (e2) {
+        console.error('[browser] playwright fallback also failed:', e2.message);
+        throw new Error(`无法加载浏览器引擎: ${e.message} / ${e2.message}`);
+      }
     }
   }
   return _chromium;
