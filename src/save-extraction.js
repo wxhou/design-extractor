@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { randomUUID } from 'crypto';
 import {
   generateThemeCss,
@@ -7,27 +5,14 @@ import {
   generateVariablesCss,
   normalizeUrl,
 } from './extractor-v2.js';
-import { uploadToSMMS } from './smms.js';
-
-const SCREENSHOTS_DIR = path.join(process.cwd(), 'public', 'screenshots');
+import { uploadScreenshot } from './screenshot-storage.js';
 
 async function saveScreenshot(screenshotBuffer, cardId) {
   if (!screenshotBuffer) return null;
 
-  const result = await uploadToSMMS(screenshotBuffer, `${cardId}.png`);
-  if (result.success) {
-    console.log('[extract] Screenshot saved as base64:', result.url.substring(0, 50) + '...');
-    return result.url;
-  }
-
-  console.log('[extract] Save failed, falling back to local storage:', result.error);
-  if (!fs.existsSync(SCREENSHOTS_DIR)) {
-    fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
-  }
-
-  const screenshotPath = path.join(SCREENSHOTS_DIR, `${cardId}.png`);
-  fs.writeFileSync(screenshotPath, screenshotBuffer);
-  return `/api/screenshots/${cardId}.png`;
+  const url = await uploadScreenshot(screenshotBuffer, cardId);
+  console.log('[extract] Screenshot saved:', url);
+  return url;
 }
 
 export async function findExistingCard(db, normalizedHost) {
@@ -114,8 +99,7 @@ export async function saveExtraction(db, normalized, result, options = {}) {
   return {
     cardId,
     screenshot: screenshotPath,
-    data: {
-      cardId,
+    data: {      cardId,
       isDuplicate: false,
       designMd: result.designMd || result.raw_data?.designMd,
       siteName: result.siteName,
@@ -136,15 +120,4 @@ export async function saveExtraction(db, normalized, result, options = {}) {
       version: 'v2',
     },
   };
-}
-
-export function cleanupLocalScreenshot(screenshotPath) {
-  if (!screenshotPath || !screenshotPath.startsWith('/api/screenshots/')) {
-    return;
-  }
-
-  const filename = path.basename(screenshotPath);
-  try {
-    fs.unlinkSync(path.join(SCREENSHOTS_DIR, filename));
-  } catch {}
 }

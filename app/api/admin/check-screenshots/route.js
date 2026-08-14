@@ -19,7 +19,7 @@
  */
 
 import { getDb } from '@/src/db.js';
-import { checkImageUrlWithSize, uploadToSMMS } from '@/src/smms.js';
+import { checkImageUrl } from '@/src/screenshot-storage.js';
 
 export async function POST(request) {
   try {
@@ -45,19 +45,13 @@ export async function POST(request) {
     for (const card of cards) {
       const screenshotUrl = card.screenshot || card.preview;
 
-      // 跳过本地路径或 base64
+      // 跳过本地路径或 base64（迁移后不应存在，防御性保留）
       if (!screenshotUrl || screenshotUrl.startsWith('/') || screenshotUrl.startsWith('data:')) {
         skipped++;
         continue;
       }
 
-      // 只检测 SM.MS 链接
-      if (!screenshotUrl.includes('sm.ms') && !screenshotUrl.includes('smMC')) {
-        skipped++;
-        continue;
-      }
-
-      const check = await checkImageUrlWithSize(screenshotUrl);
+      const check = await checkImageUrl(screenshotUrl);
 
       if (check.ok) {
         ok++;
@@ -112,8 +106,6 @@ export async function GET(request) {
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN screenshot IS NOT NULL AND screenshot != '' THEN 1 ELSE 0 END) as with_screenshot,
-        SUM(CASE WHEN screenshot LIKE '%sm.ms%' THEN 1 ELSE 0 END) as smms_screenshots,
-        SUM(CASE WHEN screenshot LIKE '%vercel%' THEN 1 ELSE 0 END) as vercel_screenshots,
         SUM(CASE WHEN screenshot LIKE '%blob.vercel%' THEN 1 ELSE 0 END) as vercel_blob_screenshots
       FROM cards
     `);

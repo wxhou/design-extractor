@@ -1,7 +1,7 @@
 import { extractDesignTokens, isUrlSafe, isValidDomain, normalizeUrl } from '@/src/extractor-v2.js';
 import { getDb } from '@/src/db.js';
 import { checkFreeIpLimit, getFreeExtractIp, getUtcDay, incrementFreeIpUsage } from '@/src/rate-limit.js';
-import { cleanupLocalScreenshot, findExistingCard, saveExtraction } from '@/src/save-extraction.js';
+import { findExistingCard, saveExtraction } from '@/src/save-extraction.js';
 import { randomUUID } from 'crypto';
 
 function getFriendlyError(errorMessage) {
@@ -71,7 +71,6 @@ export async function POST(request) {
   await incrementFreeIpUsage(db, ip, day);
 
   let cardId;
-  let screenshotPath = null;
 
   const jobId = randomUUID();
   extractionJobs.set(jobId, { status: 'starting', progress: 0 });
@@ -119,7 +118,6 @@ export async function POST(request) {
     extractionJobs.set(jobId, { status: 'saving_to_db', progress: 90 });
     const saved = await saveExtraction(db, normalized, result);
     cardId = saved.cardId;
-    screenshotPath = saved.screenshot;
 
     console.log('[extract] Card saved:', cardId);
     extractionJobs.set(jobId, { status: 'done', progress: 100, cardId, siteName: result.siteName });
@@ -132,8 +130,6 @@ export async function POST(request) {
   } catch (error) {
     console.error('[extract] Error:', error.message, error.stack);
     extractionJobs.set(jobId, { status: 'error', progress: 100, error: error.message });
-    // 清理截图
-    cleanupLocalScreenshot(screenshotPath);
     return Response.json(
       { success: false, error: getFriendlyError(error.message) },
       { status: 500 },

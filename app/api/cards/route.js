@@ -49,7 +49,7 @@ export async function GET(request) {
 
     // 数据
     const dataResult = await db.execute(
-      `SELECT id, name, url, preview, video_url, screenshot, north_star, color_scheme, category FROM cards ${whereClause} ORDER BY name LIMIT ? OFFSET ?`,
+      `SELECT id, name, url, preview, video_url, north_star, color_scheme, category FROM cards ${whereClause} ORDER BY name LIMIT ? OFFSET ?`,
       [...args, limit, offset]
     );
 
@@ -59,7 +59,6 @@ export async function GET(request) {
       url: row.url,
       preview: row.preview,
       video_url: row.video_url,
-      screenshot: row.screenshot,
       north_star: row.north_star,
       color_scheme: row.color_scheme,
       category: row.category,

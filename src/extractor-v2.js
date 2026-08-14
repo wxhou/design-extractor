@@ -254,14 +254,10 @@ export async function extractDesignTokens(url, options = {}) {
 
     // 13. AI 增强
     let enrichedData = { ...baseData };
-    let screenshotPath = null;
 
     let screenshotBuffer = null;
     try {
       screenshotBuffer = await page.screenshot({ fullPage: false, type: 'png' });
-      screenshotPath = `/tmp/screenshot-${Date.now()}.png`;
-      const fs = await import('fs');
-      fs.writeFileSync(screenshotPath, screenshotBuffer);
 
       enrichedData = await enrichWithAI(baseData, { screenshotBuffer, cssEvidence });
       // Store screenshot buffer for return value
