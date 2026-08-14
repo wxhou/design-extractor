@@ -1,14 +1,20 @@
+import { Readable } from 'stream';
 import { put } from '@vercel/blob';
 import sharp from 'sharp';
 
 /**
  * 截图存储：PNG buffer → JPEG(q80) → Vercel Blob → 返回公开 URL。
  * 失败直接抛错（无 fallback）——调用方决定提取失败语义。
+ *
+ * 注意：body 传 ReadableStream 而非 Buffer——Vercel serverless runtime
+ * 禁用了 SharedArrayBuffer，@vercel/blob 内部 undici 对 Buffer 的
+ * webidl 检查会误抛 "SharedArrayBuffer is not allowed"（本地 Node 不复现）。
  */
 export async function uploadScreenshot(pngBuffer, cardId) {
   const jpeg = await sharp(pngBuffer).jpeg({ quality: 80 }).toBuffer();
   const key = `extraction-${cardId}-${Date.now()}.jpg`;
-  const { url } = await put(key, jpeg, {
+  const stream = Readable.toWeb(Readable.from([jpeg]));
+  const { url } = await put(key, stream, {
     access: 'public',
     addRandomSuffix: false,
     contentType: 'image/jpeg',

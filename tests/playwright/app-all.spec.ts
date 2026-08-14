@@ -5,6 +5,8 @@ import { StyleDetailPage } from './pages/StyleDetailPage';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 // First card ID from database (099 agency)
 const TEST_CARD_ID = 'e4a7b5f3-f393-4f6d-b4a5-ecf874024bed';
+// Card migrated from base64 to blob storage (ncase.me)
+const MIGRATED_CARD_ID = '4f575c42-5389-4828-a64e-40dc6e1ba1ad';
 
 test.describe('App Smoke Tests', () => {
   test('Home page loads with heading and search', async ({ page }) => {
@@ -117,10 +119,38 @@ test.describe('App Smoke Tests', () => {
     expect(Array.isArray(cardsBody.cards)).toBe(true);
     expect(cardsBody.cards.length).toBeGreaterThan(0);
 
+    // List response must NOT include screenshot field (blob storage change)
+    for (const card of cardsBody.cards) {
+      expect(card).not.toHaveProperty('screenshot');
+      expect(card.preview).toBeTruthy();
+    }
+
     // Card detail API
     const cardRes = await request.get(`${BASE_URL}/api/card/${TEST_CARD_ID}`);
     expect(cardRes.status()).toBe(200);
     const cardBody = await cardRes.json();
     expect(cardBody.id).toBe(TEST_CARD_ID);
+  });
+
+  test('Detail page screenshot image loads successfully', async ({ page }) => {
+    await page.goto(`${BASE_URL}/style/${TEST_CARD_ID}`, { waitUntil: 'domcontentloaded' });
+    const detailMedia = page.locator('img.detail-media');
+    await expect(detailMedia).toBeVisible({ timeout: 15000 });
+    // naturalWidth > 0 proves the image actually decoded (not a broken/blocked URL);
+    // poll because the image may still be decoding when the element becomes visible
+    await expect(async () => {
+      const naturalWidth = await detailMedia.evaluate(img => (img as HTMLImageElement).naturalWidth);
+      expect(naturalWidth).toBeGreaterThan(0);
+    }).toPass({ timeout: 15000 });
+  });
+
+  test('Migrated card (base64→blob) detail page renders screenshot', async ({ page }) => {
+    await page.goto(`${BASE_URL}/style/${MIGRATED_CARD_ID}`, { waitUntil: 'domcontentloaded' });
+    const detailMedia = page.locator('img.detail-media');
+    await expect(detailMedia).toBeVisible({ timeout: 15000 });
+    await expect(async () => {
+      const naturalWidth = await detailMedia.evaluate(img => (img as HTMLImageElement).naturalWidth);
+      expect(naturalWidth).toBeGreaterThan(0);
+    }).toPass({ timeout: 15000 });
   });
 });
