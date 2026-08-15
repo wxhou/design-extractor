@@ -42,7 +42,6 @@ Thumbs.db
 
 .claude/
 CLAUDE.md
-openspec/
 
 # Agent / Codex tooling (local-only)
 .agents/
@@ -54,8 +53,8 @@ docs/
 
 # Testing
 coverage/
-tests/
 tests/playwright/test-results/
+tests/playwright/changes/
 test-results/
 playwright-report/
 blob-report/

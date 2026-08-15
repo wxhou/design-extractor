@@ -10,7 +10,7 @@ import { expect } from '@playwright/test';
 export class HomePage extends BasePage {
   // ─── Inputs ─────────────────────────────────────────────────────────────────
   get urlInput() { return this.byPlaceholder('https://stripe.com'); }
-  get searchInput() { return this.byPlaceholder('Search sites...'); }
+  get searchInput() { return this.byPlaceholder(/搜索已提取的网站|Search extracted sites/); }
 
   // ─── Buttons ────────────────────────────────────────────────────────────────
   get extractBtn() { return this.byRole('button', { name: 'Extract Tokens' }); }

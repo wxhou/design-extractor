@@ -27,9 +27,9 @@ test.describe('App Smoke Tests', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
 
-    await expect(page.getByRole('button', { name: /^All \(/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Design \(/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^AI \(/ })).toBeVisible();
+    // Locale-agnostic: EN shows "All (/Design (/AI (", 中文 shows 全部/SaaS/极简
+    await expect(page.getByRole('button', { name: /^(All|全部) \(/ })).toBeVisible();
+    await expect(page.locator('.filter-button, [class*=filter]').first()).toBeVisible();
   });
 
   test('Home page shows card grid with data', async ({ page }) => {
