@@ -48,6 +48,7 @@ openspec/
 .agents/
 .codex/
 AGENTS.md
+.mcp.json
 .opencode/
 opencode.jsonc
 docs/
@@ -55,6 +56,7 @@ docs/
 # Testing
 coverage/
 tests/
+playwright.config.ts
 tests/playwright/test-results/
 test-results/
 playwright-report/
