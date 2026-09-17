@@ -660,7 +660,6 @@ body {
   padding: 18px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  overflow: hidden;
 }
 .works-with > span,
 .works-with-label {
@@ -672,6 +671,14 @@ body {
   font-family: var(--font-mono);
   flex-shrink: 0;
   white-space: nowrap;
+}
+/* Scroll viewport — keeps the moving track clear of the label */
+.works-with-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
 .works-with-track {
   display: flex;
@@ -1164,6 +1171,42 @@ body {
   font-family: var(--font-mono);
 }
 
+/* ── Pagination (appears past the 99-card first screen) ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 28px 0 8px;
+}
+.pagination button {
+  padding: 9px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pagination button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pagination button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.pagination-info {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  min-width: 180px;
+  text-align: center;
+}
+
 /* ============================
    ANIMATIONS
    ============================ */
@@ -1382,7 +1425,7 @@ body {
   .cards-grid { grid-template-columns: 1fr; }
   .header-link:not(.header-link-primary) { display: none; }
   .works-with { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .works-with-track { width: 100%; }
+  .works-with-viewport { width: 100%; }
   .specimen-swatches { grid-template-columns: 1fr; }
   .filter-row { gap: 2px; }
   .filter-pill { padding: 6px 10px; font-size: 11px; }
