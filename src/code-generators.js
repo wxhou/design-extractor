@@ -533,8 +533,15 @@ description: "Design tokens extracted from ${url || siteName || 'a website'}"
   // Colors
   if (colors && colors.length > 0) {
     md += `\ncolors:\n`;
+    const usedNames = new Set();
     for (const c of colors.slice(0, 12)) {
-      const name = toCssName(c.name || c.hex);
+      const base = toCssName(c.name || c.hex);
+      let name = base;
+      let i = 2;
+      while (usedNames.has(name)) {
+        name = `${base}-${i++}`;
+      }
+      usedNames.add(name);
       md += `  ${name}: "${c.hex}"\n`;
     }
   }
