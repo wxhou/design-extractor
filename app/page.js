@@ -402,6 +402,7 @@ export default function Home() {
 
       <section className="hero-stage">
         <div className="hero-grid" aria-hidden="true" />
+        <div className="hero-ruler" aria-hidden="true" />
         <div className="hero-inner">
           <div className="hero-copy">
             <p className="hero-eyebrow">{t.brand}</p>
@@ -443,7 +444,10 @@ export default function Home() {
             </div>
           </div>
 
-          <aside className="hero-specimen" aria-label={t.specimenLabel}>
+          <div className="hero-specimen-frame">
+            <span className="specimen-crop specimen-crop--tl" aria-hidden="true" />
+            <span className="specimen-crop specimen-crop--br" aria-hidden="true" />
+            <aside className="hero-specimen" aria-label={t.specimenLabel}>
             <div className="specimen-chrome">
               <span className="specimen-file">{t.specimenLabel}</span>
               <span className="specimen-source">{t.specimenSource}</span>
@@ -469,32 +473,45 @@ export default function Home() {
                 <span key={format}>{format}</span>
               ))}
             </div>
-          </aside>
+            </aside>
+            <span className="specimen-fig">fig. 01 — extracted specimen</span>
+          </div>
         </div>
       </section>
 
       <main className="main">
         <div className="works-with">
-          <span>{t.worksWith}</span>
-          <ul className="works-with-list">
-            {WORKS_WITH.map((name) => (
-              <li key={name}>{name}</li>
-            ))}
-          </ul>
+          <span className="works-with-label">{t.worksWith}</span>
+          <div className="works-with-track">
+            <ul className="works-with-list">
+              {WORKS_WITH.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+            <ul className="works-with-list" aria-hidden="true">
+              {WORKS_WITH.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </div>
         </div>
 
-        <section className="process-rail" aria-label="How it works">
-          {steps.map((step, index) => (
-            <article key={step.title} className="process-step">
-              <span className="process-index" aria-hidden="true">0{index + 1}</span>
-              <h3>{step.title}</h3>
-              <p>{step.body}</p>
-            </article>
-          ))}
+        <section className="process-section" aria-label="How it works">
+          <p className="spec-label">01 / Workflow</p>
+          <div className="process-rail">
+            {steps.map((step, index) => (
+              <article key={step.title} className="process-step">
+                <span className="process-index" aria-hidden="true">0{index + 1}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
         <div id="library" className="library-section">
           <div className="library-heading">
+            <p className="spec-label">02 / Library</p>
             <h2 className="library-title">{t.libraryTitle}</h2>
             <p className="library-subtitle">{t.librarySub}</p>
           </div>
@@ -642,6 +659,7 @@ export default function Home() {
 
         <section className="api-band">
           <div className="api-band-copy">
+            <p className="spec-label spec-label--ondark">03 / API</p>
             <h2>{t.apiBandTitle}</h2>
             <p>{t.apiBandBody}</p>
           </div>
@@ -649,6 +667,7 @@ export default function Home() {
         </section>
 
         <section className="faq-section" aria-labelledby="faq-heading">
+          <p className="spec-label">04 / FAQ</p>
           <h2 id="faq-heading" className="faq-title">{t.faqTitle}</h2>
           <div className="faq-grid">
             {t.faq.map((item) => (
