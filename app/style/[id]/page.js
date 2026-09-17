@@ -165,6 +165,7 @@ export default function StylePage() {
   const [copied, setCopied] = useState(null);
   const [locale, setLocale] = useState('en');
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only locale detection; server renders 'en' default
     setLocale(navigator.language.startsWith('zh') ? 'zh' : 'en');
   }, []);
   const [fontPreview, setFontPreview] = useState('The quick brown fox jumps over the lazy dog');
@@ -780,7 +781,7 @@ export default function StylePage() {
                 )}
                 {ds.donts?.length > 0 && (
                   <div className="donts-column">
-                    <div className="donts-header"><span className="donts-icon">&#10005;</span><span>Don't</span></div>
+                    <div className="donts-header"><span className="donts-icon">&#10005;</span><span>Don&apos;t</span></div>
                     <ul className="donts-list">{ds.donts.map((d, i) => <li key={i} className="donts-item">{d}</li>)}</ul>
                   </div>
                 )}
@@ -864,7 +865,7 @@ export default function StylePage() {
                 )}
                 {donts.length > 0 && (
                   <div className="donts-column">
-                    <div className="donts-header"><span className="donts-icon">&#10005;</span><span>Don't</span></div>
+                    <div className="donts-header"><span className="donts-icon">&#10005;</span><span>Don&apos;t</span></div>
                     <ul className="donts-list">{donts.map((d, i) => <li key={i} className="donts-item">{d}</li>)}</ul>
                   </div>
                 )}

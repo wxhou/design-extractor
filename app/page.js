@@ -219,6 +219,7 @@ export default function Home() {
   const [locale, setLocale]     = useState('en');
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only locale detection; server renders 'en' default
     setLocale(/^zh/.test(navigator.language) ? 'zh' : 'en');
   }, []);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -282,6 +283,7 @@ export default function Home() {
   }, [activeFilter, search, screen]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset list state on filter/search change before reload
     setCards([]);
     setPage(1);
     setScreen(1);
@@ -309,6 +311,7 @@ export default function Home() {
 
   useEffect(() => {
     if (page === 1) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- infinite scroll: load next page when page state advances
     loadPage(page);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
