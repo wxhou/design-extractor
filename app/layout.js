@@ -1,4 +1,5 @@
 import './globals.css'
+import { Agentation } from "agentation"
 
 export const metadata = {
   title: 'Url2Design | URL → Design System',
@@ -19,7 +20,10 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {process.env.NODE_ENV === "development" && <Agentation />}
+      </body>
     </html>
   )
 }
