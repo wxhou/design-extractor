@@ -115,6 +115,10 @@ const T_HOME = {
 };
 
 const PAGE_SIZE = 20;
+// 无限滚动加载上限：到顶后停止分页，引导用搜索/分类查看
+const MAX_CARDS = 99;
+// 翻页模式的每屏数量（与 MAX_CARDS 一致，第 1 屏两种模式数据无缝衔接）
+const SCREEN_SIZE = 99;
 
 const WORKS_WITH = ['Cursor', 'Claude Code', 'Copilot', 'Codex', 'Devin', 'CI'];
 
@@ -215,6 +219,7 @@ export default function Home() {
   const [locale, setLocale]     = useState('en');
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only locale detection; server renders 'en' default
     setLocale(/^zh/.test(navigator.language) ? 'zh' : 'en');
   }, []);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -225,6 +230,7 @@ export default function Home() {
 
   const [cards, setCards]       = useState([]);
   const [page, setPage]         = useState(1);
+  const [screen, setScreen]     = useState(1);
   const [hasMore, setHasMore]   = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [total, setTotal]       = useState(0);
@@ -247,7 +253,7 @@ export default function Home() {
           setCategories(data.categories);
         }
       } else {
-        setCards(prev => [...prev, ...(data.cards || [])]);
+        setCards(prev => [...prev, ...(data.cards || [])].slice(0, MAX_CARDS));
       }
       setHasMore(data.hasMore || false);
       setTotal(data.total || 0);
@@ -257,9 +263,30 @@ export default function Home() {
     else setLoadingMore(false);
   }, [activeFilter, search]);
 
+  // 翻页：整屏替换（page=N&limit=SCREEN_SIZE），第 1 屏与无限滚动的累积结果一致
+  const goToScreen = useCallback(async (n) => {
+    if (n === screen) return;
+    setLoading(true);
+    setCards([]);
+    try {
+      const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+      const res = await fetch(`/api/cards?category=${activeFilter}&page=${n}&limit=${SCREEN_SIZE}${searchParam}`);
+      const data = await res.json();
+      setCards(data.cards || []);
+      setHasMore(data.hasMore || false);
+      setTotal(data.total || 0);
+      setScreen(n);
+      setPage(n);
+    } catch (_) {}
+    setLoading(false);
+    document.getElementById('library')?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeFilter, search, screen]);
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset list state on filter/search change before reload
     setCards([]);
     setPage(1);
+    setScreen(1);
     setHasMore(true);
     setTotal(0);
     const t = setTimeout(() => loadPage(1), 0);
@@ -284,6 +311,7 @@ export default function Home() {
 
   useEffect(() => {
     if (page === 1) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- infinite scroll: load next page when page state advances
     loadPage(page);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
@@ -291,7 +319,7 @@ export default function Home() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        if (entries[0].isIntersecting && hasMore && cards.length < MAX_CARDS && !loadingMore && !loading) {
           setPage(prev => prev + 1);
         }
       },
@@ -300,7 +328,7 @@ export default function Home() {
     const sentinel = sentinelRef.current;
     if (sentinel) observer.observe(sentinel);
     return () => { if (sentinel) observer.unobserve(sentinel); };
-  }, [hasMore, loadingMore, loading]);
+  }, [hasMore, loadingMore, loading, cards.length]);
 
   async function handleExtract(targetUrl) {
     if (!targetUrl) return;
@@ -402,6 +430,7 @@ export default function Home() {
 
       <section className="hero-stage">
         <div className="hero-grid" aria-hidden="true" />
+        <div className="hero-ruler" aria-hidden="true" />
         <div className="hero-inner">
           <div className="hero-copy">
             <p className="hero-eyebrow">{t.brand}</p>
@@ -443,7 +472,10 @@ export default function Home() {
             </div>
           </div>
 
-          <aside className="hero-specimen" aria-label={t.specimenLabel}>
+          <div className="hero-specimen-frame">
+            <span className="specimen-crop specimen-crop--tl" aria-hidden="true" />
+            <span className="specimen-crop specimen-crop--br" aria-hidden="true" />
+            <aside className="hero-specimen" aria-label={t.specimenLabel}>
             <div className="specimen-chrome">
               <span className="specimen-file">{t.specimenLabel}</span>
               <span className="specimen-source">{t.specimenSource}</span>
@@ -469,32 +501,47 @@ export default function Home() {
                 <span key={format}>{format}</span>
               ))}
             </div>
-          </aside>
+            </aside>
+            <span className="specimen-fig">fig. 01 — extracted specimen</span>
+          </div>
         </div>
       </section>
 
       <main className="main">
         <div className="works-with">
-          <span>{t.worksWith}</span>
-          <ul className="works-with-list">
-            {WORKS_WITH.map((name) => (
-              <li key={name}>{name}</li>
-            ))}
-          </ul>
+          <span className="works-with-label">{t.worksWith}</span>
+          <div className="works-with-viewport">
+            <div className="works-with-track">
+            <ul className="works-with-list">
+              {WORKS_WITH.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+            <ul className="works-with-list" aria-hidden="true">
+              {WORKS_WITH.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+            </div>
+          </div>
         </div>
 
-        <section className="process-rail" aria-label="How it works">
-          {steps.map((step, index) => (
-            <article key={step.title} className="process-step">
-              <span className="process-index" aria-hidden="true">0{index + 1}</span>
-              <h3>{step.title}</h3>
-              <p>{step.body}</p>
-            </article>
-          ))}
+        <section className="process-section" aria-label="How it works">
+          <p className="spec-label">01 / Workflow</p>
+          <div className="process-rail">
+            {steps.map((step, index) => (
+              <article key={step.title} className="process-step">
+                <span className="process-index" aria-hidden="true">0{index + 1}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
         <div id="library" className="library-section">
           <div className="library-heading">
+            <p className="spec-label">02 / Library</p>
             <h2 className="library-title">{t.libraryTitle}</h2>
             <p className="library-subtitle">{t.librarySub}</p>
           </div>
@@ -630,11 +677,34 @@ export default function Home() {
               </div>
             )}
 
-            {!hasMore && cards.length > 0 && (
-              <div className="cards-footer">
-                <span className="cards-footer-text">{locale === 'zh' ? `全部 ${total} 个样式已加载` : `All ${total} styles loaded`}</span>
-              </div>
-            )}
+            {(() => {
+              const totalPages = Math.ceil(total / SCREEN_SIZE);
+              const showPager = cards.length > 0 && totalPages > 1 && (screen > 1 || cards.length >= MAX_CARDS);
+              return (
+                <>
+                  {showPager && (
+                    <div className="pagination">
+                      <button onClick={() => goToScreen(screen - 1)} disabled={screen <= 1 || loading}>
+                        {locale === 'zh' ? '上一页' : 'Prev'}
+                      </button>
+                      <span className="pagination-info">
+                        {locale === 'zh' ? `第 ${screen} / ${totalPages} 页 · 共 ${total} 个` : `Page ${screen} / ${totalPages} · ${total} styles`}
+                      </span>
+                      <button onClick={() => goToScreen(screen + 1)} disabled={screen >= totalPages || loading}>
+                        {locale === 'zh' ? '下一页' : 'Next'}
+                      </button>
+                    </div>
+                  )}
+                  {screen === 1 && !hasMore && cards.length > 0 && (
+                    <div className="cards-footer">
+                      <span className="cards-footer-text">
+                        {locale === 'zh' ? `全部 ${total} 个样式已加载` : `All ${total} styles loaded`}
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -642,6 +712,7 @@ export default function Home() {
 
         <section className="api-band">
           <div className="api-band-copy">
+            <p className="spec-label spec-label--ondark">03 / API</p>
             <h2>{t.apiBandTitle}</h2>
             <p>{t.apiBandBody}</p>
           </div>
@@ -649,6 +720,7 @@ export default function Home() {
         </section>
 
         <section className="faq-section" aria-labelledby="faq-heading">
+          <p className="spec-label">04 / FAQ</p>
           <h2 id="faq-heading" className="faq-title">{t.faqTitle}</h2>
           <div className="faq-grid">
             {t.faq.map((item) => (

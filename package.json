@@ -10,6 +10,7 @@
     "cli": "node cli.js",
     "postinstall": "node scripts/postinstall.mjs",
     "migrate:auth": "node scripts/migrate-auth-tables.mjs",
+    "test": "node --test \"tests/unit/*.test.js\"",
     "playwright:install": "playwright install chromium"
   },
   "bin": {
@@ -41,6 +42,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
-    "agentation": "^3.0.2"
+    "agentation": "^3.0.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.5"
   }
 }

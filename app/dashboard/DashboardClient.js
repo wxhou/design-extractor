@@ -75,6 +75,7 @@ export default function DashboardClient({ user, remainingCredits, hasStripeCusto
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load API keys once the signed-in user is known
     loadKeys();
   }, [user?.id]);
 

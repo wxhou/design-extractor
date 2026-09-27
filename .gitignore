@@ -42,19 +42,22 @@ Thumbs.db
 
 .claude/
 CLAUDE.md
+openspec/
 
 # Agent / Codex tooling (local-only)
 .agents/
 .codex/
 AGENTS.md
+.mcp.json
 .opencode/
 opencode.jsonc
 docs/
 
 # Testing
 coverage/
+tests/
+playwright.config.ts
 tests/playwright/test-results/
-tests/playwright/changes/
 test-results/
 playwright-report/
 blob-report/
