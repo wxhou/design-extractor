@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 import { signIn, signOut } from 'next-auth/react';
 
 const CURL_EXAMPLE = `curl -X POST https://url2design.com/api/v1/extract \\
@@ -77,6 +79,7 @@ export default function DashboardClient({ user, remainingCredits, hasStripeCusto
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- load API keys once the signed-in user is known
     loadKeys();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在用户身份变化时拉取；loadKeys 每次渲染都是新引用
   }, [user?.id]);
 
   async function createKey(event) {
@@ -175,12 +178,12 @@ export default function DashboardClient({ user, remainingCredits, hasStripeCusto
 
       <section className="dashboard-shell">
         <header className="dashboard-topbar">
-          <a className="dashboard-brand" href="/">
+          <Link className="dashboard-brand" href="/">
             <span className="dashboard-brand-icon">
               <LogoMark />
             </span>
             <span className="dashboard-brand-name">Url2Design</span>
-          </a>
+          </Link>
           {user && (
             <button
               type="button"
@@ -260,7 +263,7 @@ export default function DashboardClient({ user, remainingCredits, hasStripeCusto
               <section className="dashboard-card dashboard-account">
                 <div className="dashboard-account-head">
                   {user.image ? (
-                    <img className="dashboard-avatar" src={user.image} alt="" width={44} height={44} />
+                    <Image className="dashboard-avatar" src={user.image} alt="" width={44} height={44} />
                   ) : (
                     <span className="dashboard-avatar dashboard-avatar-fallback" aria-hidden="true">
                       {(user.name || user.email || 'U').slice(0, 1).toUpperCase()}

@@ -5,8 +5,6 @@
    The site demonstrates its own extracted tokens.
    ============================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 :root {
   /* ── Core palette (mirrors the specimen we advertise) ── */
   --bg:            #eef0f3;
@@ -41,9 +39,9 @@
   --shadow-input:  0 0 0 3px rgba(255, 59, 0, 0.14);
 
   /* ── Typography ── */
-  --font-sans:     'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display:  'Syne', 'IBM Plex Sans', sans-serif;
-  --font-mono:     'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  --font-sans:     var(--font-plex-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display:  var(--font-syne), var(--font-plex-sans), sans-serif;
+  --font-mono:     var(--font-jetbrains-mono), 'SF Mono', Menlo, monospace;
 
   /* ── Motion ── */
   --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);

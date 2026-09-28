@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import {
   MagnifyingGlass,
   ArrowRight,
@@ -172,11 +174,12 @@ function VideoCard({ card, onCardClick }) {
       <div className={`card-mode-bar ${card.color_scheme?.toLowerCase() || 'light'}`} />
       <div className="card-image-wrap" ref={wrapRef}>
         {!videoActive && (
-          <img
+          <Image
             className="card-image"
             src={card.preview}
             alt={card.name}
-            loading="lazy"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         )}
         {card.video_url && (
@@ -307,6 +310,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce 只跟随输入框变化；补 loadPage/search 依赖会在 loadPage 内 setState 时打破 debounce 语义
   }, [searchInput]);
 
   useEffect(() => {
@@ -410,14 +414,14 @@ export default function Home() {
       </div>
 
       <header className="header">
-        <a className="header-logo" href="/">
+        <Link className="header-logo" href="/">
           <div className="header-logo-icon">
             <LogoMark />
           </div>
           <div className="header-logo-text">
             Url<span>2Design</span>
           </div>
-        </a>
+        </Link>
         <nav className="header-nav" aria-label="Primary">
           <div className="header-lang">
             <button type="button" className={`lang-btn${locale === 'en' ? ' active' : ''}`} onClick={() => setLocale('en')}>EN</button>

@@ -2,7 +2,7 @@
 const URL2DESIGN_HOST = 'url2design.com';
 const VERCEL_URL = 'design-extractor-five.vercel.app';
 
-export default {
+const worker = {
   async fetch(request) {
     const url = new URL(request.url);
     url.hostname = VERCEL_URL;
@@ -48,3 +48,5 @@ export default {
     return newResponse;
   },
 };
+
+export default worker;

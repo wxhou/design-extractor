@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { BackIcon, ExternalIcon, CopyIcon, CheckIcon, DownloadIcon, CodeIcon, CloseIcon } from './components/icons.jsx';
 import { getDesignMd as designMd } from './utils/design-md.js';
@@ -476,7 +477,7 @@ export default function StylePage() {
             {card.video_url ? (
               <video src={card.video_url} autoPlay loop muted playsInline className="detail-media" />
             ) : card.screenshot ? (
-              <img src={card.screenshot} alt={card.name} className="detail-media" />
+              <Image src={card.screenshot} alt={card.name} fill className="detail-media" />
             ) : (
               <div className="detail-media-placeholder"><span>No preview</span></div>
             )}
@@ -725,6 +726,7 @@ export default function StylePage() {
                 <div className="imagery-list">
                   {imageryData.data.slice(0, 12).map((img, i) => (
                     <div key={i} className="imagery-item">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- 图片域名来自被提取的任意站点，无法在 next/image 白名单 */}
                       {img.url && <img src={img.url} alt={img.alt || img.style || ''} className="imagery-thumb" loading="lazy" />}
                       <div className="imagery-info">
                         {img.style && <span className="imagery-style">{img.style}</span>}
@@ -797,6 +799,7 @@ export default function StylePage() {
               <div className="components-grid">
                 {ds.components.map((comp, i) => (
                   <div key={i} className="component-item">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 截图域名来自被提取的任意站点，无法在 next/image 白名单 */}
                     {comp.screenshot && <img src={comp.screenshot} alt={comp.name || comp.type || `Component ${i + 1}`} className="component-screenshot" loading="lazy" />}
                     <div className="component-info">
                       <span className="component-name">{comp.name || comp.type || `Component ${i + 1}`}</span>
@@ -1170,6 +1173,7 @@ export default function StylePage() {
           margin: 0;
         }
         .detail-preview {
+          position: relative;
           border-radius: var(--radius-lg);
           overflow: hidden;
           background: var(--bg-subtle);
