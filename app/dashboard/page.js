@@ -1,4 +1,4 @@
-import { auth } from '../../auth.js';
+import { auth, hasEmailProvider } from '../../auth.js';
 import { getDb } from '@/src/db.js';
 import { getDashboardCredits } from '@/src/dashboard-keys.js';
 import DashboardClient from './DashboardClient.js';
@@ -51,6 +51,7 @@ export default async function DashboardPage() {
       user={user}
       remainingCredits={remainingCredits}
       hasStripeCustomer={hasStripeCustomer}
+      hasEmailProvider={hasEmailProvider}
     />
   );
 }

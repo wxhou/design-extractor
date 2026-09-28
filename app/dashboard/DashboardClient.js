@@ -46,7 +46,7 @@ async function parseJson(response) {
   }
 }
 
-export default function DashboardClient({ user, remainingCredits, hasStripeCustomer = false }) {
+export default function DashboardClient({ user, remainingCredits, hasStripeCustomer = false, hasEmailProvider = false }) {
   const [keys, setKeys] = useState([]);
   const [keyName, setKeyName] = useState('');
   const [plaintext, setPlaintext] = useState(null);
@@ -219,27 +219,31 @@ export default function DashboardClient({ user, remainingCredits, hasStripeCusto
                 </button>
               </div>
 
-              <div className="dashboard-divider" role="separator">
-                <span>或使用邮箱</span>
-              </div>
+              {hasEmailProvider && (
+                <>
+                  <div className="dashboard-divider" role="separator">
+                    <span>或使用邮箱</span>
+                  </div>
 
-              <form className="dashboard-email-form" onSubmit={signInWithEmail}>
-                <label className="visually-hidden" htmlFor="dashboard-email">
-                  邮箱地址
-                </label>
-                <input
-                  id="dashboard-email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                />
-                <button type="submit" className="dashboard-email-submit">
-                  发送魔法链接
-                </button>
-              </form>
+                  <form className="dashboard-email-form" onSubmit={signInWithEmail}>
+                    <label className="visually-hidden" htmlFor="dashboard-email">
+                      邮箱地址
+                    </label>
+                    <input
+                      id="dashboard-email"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      required
+                    />
+                    <button type="submit" className="dashboard-email-submit">
+                      发送魔法链接
+                    </button>
+                  </form>
+                </>
+              )}
             </section>
           </div>
         ) : (
