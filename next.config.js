@@ -10,6 +10,8 @@ const nextConfig = {
     root: path.dirname(fileURLToPath(import.meta.url)),
   },
   images: {
+    // 本地 E2E 时代理工具 fake-IP DNS 会把图床解析成私有 IP，优化器拒绝上游请求；E2E 只验证加载行为
+    unoptimized: process.env.PLAYWRIGHT_IMAGES_UNOPTIMIZED === '1',
     remotePatterns: [
       { protocol: 'https', hostname: 'images.refero.design' },
       { protocol: 'https', hostname: '**.public.blob.vercel-storage.com' },
